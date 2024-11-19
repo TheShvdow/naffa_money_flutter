@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "535910879121",
+    "project_id": "naffa-5c323",
+    "storage_bucket": "naffa-5c323.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:535910879121:android:943a8354643ceafa659430",
+        "android_client_info": {
+          "package_name": "sn.naffa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCm6tz8famdEdHvJm2jEU80DmVdWFcTF8I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
