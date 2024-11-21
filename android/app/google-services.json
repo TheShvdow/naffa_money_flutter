@@ -12,7 +12,20 @@
           "package_name": "sn.naffa.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "535910879121-kuitcnlaekkrcubaihnjcp7q5mpbbp5d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "sn.naffa.app",
+            "certificate_hash": "d99fc3d2106faeafa1860ddd33bbf80c6f43d03e"
+          }
+        },
+        {
+          "client_id": "535910879121-m6a5056vsfrcdl6qe7c7b3vl9ggoduvg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCm6tz8famdEdHvJm2jEU80DmVdWFcTF8I"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "535910879121-m6a5056vsfrcdl6qe7c7b3vl9ggoduvg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "535910879121-oh4r4mqif5iao7hc4qrrrhvrnpu4v4hm.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.naffaMoney"
+              }
+            }
+          ]
         }
       }
     }

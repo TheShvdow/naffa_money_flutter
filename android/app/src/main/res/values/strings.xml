@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">naffa_money</string>
+    <string name="facebook_app_id">2687169581466640</string>
+    <string name="fb_login_protocol_scheme">fb2687169581466640</string>
+    <string name="facebook_client_token">8ad88ed57aeb5bd57064c246413df39c</string>
+</resources>

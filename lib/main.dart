@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:naffa_money/screens/auth/login_screen.dart';
+import 'package:naffa_money/screens/distributor/distributor_home_screen.dart';
+import 'package:naffa_money/screens/home/home_screen.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -7,125 +12,142 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+  await GoogleSignIn().isSignedIn();
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Naffa',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Colors.grey[50],
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: AuthenticationWrapper(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+class AuthenticationWrapper extends StatelessWidget {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+    return StreamBuilder<User?>(
+      stream: _auth.authStateChanges(),
+      builder: (context, snapshot) {
+        // Afficher un écran de chargement pendant la vérification
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.blue.shade50,
+                    ),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 30,
+                      height: 30,
+                    )
+                  ),
+                  SizedBox(height: 16),
+                  CircularProgressIndicator(),
+                  SizedBox(height: 8),
+                  Text(
+                    'Chargement...',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+          );
+        }
+        bool isDistributor(User? user) {
+          return user?.email?.endsWith('@naffamoney.sn') ?? false;
+        }
+
+        // Si l'utilisateur est connecté, afficher HomeScreen
+        if (snapshot.hasData && snapshot.data != null) {
+          User? user = snapshot.data;
+
+          if (isDistributor(user)) {
+            return DistributorHomeScreen();
+          } else {
+            return HomeScreen();
+          }
+        }
+
+
+        // Si l'utilisateur n'est pas connecté, afficher LoginScreen
+        return LoginScreen();
+      },
+    );
+  }
+}
+
+// Classe d'animation personnalisée pour les transitions
+class FadePageRoute<T> extends PageRoute<T> {
+  FadePageRoute({
+    required this.builder,
+    this.duration = const Duration(milliseconds: 300),
+  });
+
+  final WidgetBuilder builder;
+  final Duration duration;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration => duration;
+
+  @override
+  Widget buildPage(BuildContext context, Animation<double> animation,
+      Animation<double> secondaryAnimation) {
+    return FadeTransition(
+      opacity: animation,
+      child: builder(context),
+    );
+  }
+}
+
+// Extension pour faciliter la navigation avec animation
+extension NavigationExtension on BuildContext {
+  Future<T?> pushWithFade<T extends Object?>(Widget page) {
+    return Navigator.of(this).push(
+      FadePageRoute<T>(
+        builder: (_) => page,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+
+  Future<T?> pushReplacementWithFade<T extends Object?, TO extends Object?>(
+      Widget page) {
+    return Navigator.of(this).pushReplacement(
+      FadePageRoute<T>(
+        builder: (_) => page,
+      ),
     );
   }
 }
