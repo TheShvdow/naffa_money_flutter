@@ -1,14 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:naffa_money/screens/profile/profile_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:naffa_money/screens/withdrawal/withdrawal_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
-import '../transfert/transfert_screen.dart';
 import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../services/auth_service.dart';
+import '../transfert/transaction_details_screen.dart.dart';
+import '../transfert/transfert_type_screen.dart';
+import '../../models/transaction_model.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -19,6 +23,60 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
+  final TextEditingController _searchController = TextEditingController();
+
+  bool _isBalanceHidden = false;
+  Map<String, dynamic>? _userData;
+  String _selectedFilter = 'all';
+  String _searchQuery = '';
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+
+  Future<void> _loadBalanceVisibility() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _isBalanceHidden = prefs.getBool('isBalanceHidden') ?? false;
+      });
+    } catch (e) {
+      print('Erreur lors du chargement de la visibilité du solde: $e');
+    }
+  }
+
+  Future<void> _toggleBalanceVisibility() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _isBalanceHidden = !_isBalanceHidden;
+      });
+      await prefs.setBool('isBalanceHidden', _isBalanceHidden);
+    } catch (e) {
+      print('Erreur lors de la sauvegarde de la visibilité du solde: $e');
+    }
+  }
 
   String _generateQRData(Map<String, dynamic> userData) {
     final qrData = {
@@ -35,11 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       child: Row(
         children: [
-          // Section solde (côté gauche)
           Expanded(
-            flex: 3, // Prend 60% de l'espace
+            flex: 3,
             child: Container(
-              height: 180, // Hauteur fixe pour correspondre au QR
+              height: 180,
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -51,13 +108,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Solde disponible',
-                    style: TextStyle(color: Colors.white70),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Solde disponible',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isBalanceHidden = !_isBalanceHidden;
+                          });
+                          SharedPreferences.getInstance().then((prefs) {
+                            prefs.setBool('isBalanceHidden', _isBalanceHidden);
+                          });
+                        },
+                        child: Icon(
+                          _isBalanceHidden
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '${(userData['balance'] ?? 0.0).toStringAsFixed(0)} FCFA',
+                    _isBalanceHidden
+                        ? '• • • • • • FCFA'
+                        : '${(userData['balance'] ?? 0.0).toStringAsFixed(0)} FCFA',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -68,10 +149,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          SizedBox(width: 16), // Espacement entre les deux éléments
-          // Section QR (côté droit)
+          SizedBox(width: 16),
           Expanded(
-            flex: 2, // Prend 40% de l'espace
+            flex: 2,
             child: GestureDetector(
               onTap: () {
                 showDialog(
@@ -114,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
               child: Container(
-                height: 180, // Même hauteur que la section solde
+                height: 180,
                 decoration: BoxDecoration(
                   color: Colors.blue.shade800,
                   borderRadius: BorderRadius.circular(15),
@@ -176,8 +256,12 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: Text('Aucune donnée utilisateur'));
           }
 
-          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          final user = UserModel.fromJson(userData);
+          final newUserData = userSnapshot.data!.data() as Map<String, dynamic>;
+          if (_userData == null || newUserData['balance'] != _userData!['balance']) {
+            _userData = newUserData;
+          }
+
+          final user = UserModel.fromJson(_userData!);
 
           return Scaffold(
             appBar: AppBar(
@@ -293,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBalanceAndQRSection(userData),
+                    _buildBalanceAndQRSection(_userData!),
                     const SizedBox(height: 10),
                     _buildQuickActions(context),
                     const SizedBox(height: 20),
@@ -351,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Envoyer',
               () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => TransferScreen()),
+            MaterialPageRoute(builder: (context) => TransferTypeScreen()),
           ),
         ),
         _buildActionButton(
@@ -405,117 +489,182 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentTransactions() {
+    final userId = _auth.currentUser?.uid;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Transactions',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Transactions',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.filter_list),
+                onSelected: (String filter) {
+                  setState(() {
+                    _selectedFilter = filter;
+                  });
+                },
+                itemBuilder: (BuildContext context) => [
+                  PopupMenuItem(
+                    value: 'all',
+                    child: Text('Toutes'),
+                  ),
+                  PopupMenuItem(
+                    value: 'sent',
+                    child: Text('Envoyées'),
+                  ),
+                  PopupMenuItem(
+                    value: 'received',
+                    child: Text('Reçues'),
+                  ),
+                  PopupMenuItem(
+                    value: 'deposit',
+                    child: Text('Dépôts'),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        StreamBuilder<List<QueryDocumentSnapshot>>(
-          stream: _firestore
-              .collection('transactions')
-              .where('clientId', isEqualTo: _auth.currentUser?.uid)
-              .snapshots()
-              .map((snapshot) => snapshot.docs),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Text('Erreur: ${snapshot.error}');
-            }
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Rechercher une transaction...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ),
+        Container(
+          height: 400,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('transactions')
+                .where(Filter.or(
+              Filter('senderId', isEqualTo: userId),
+              Filter('receiverId', isEqualTo: userId),
+              Filter('clientId', isEqualTo: userId),
+            ))
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text('Erreur: ${snapshot.error}');
+              }
 
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            final clientTransactions = snapshot.data ?? [];
-
-            return StreamBuilder<List<QueryDocumentSnapshot>>(
-              stream: _firestore
-                  .collection('transactions')
-                  .where('userId', isEqualTo: _auth.currentUser?.uid)
-                  .snapshots()
-                  .map((snapshot) => snapshot.docs),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text('Erreur: ${snapshot.error}');
+              var transactions = snapshot.data?.docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                if (data['type'] == 'deposit') {
+                  data['isDebit'] = false;
+                } else {
+                  data['isDebit'] = data['senderId'] == userId;
                 }
+                return TransactionModel.fromJson(data);
+              }).toList() ?? [];
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+              // Application des filtres
+              if (_searchQuery.isNotEmpty) {
+                transactions = transactions.where((transaction) {
+                  return transaction.receiverName?.toLowerCase().contains(_searchQuery) == true ||
+                      transaction.senderName?.toLowerCase().contains(_searchQuery) == true ||
+                      transaction.amount.toString().contains(_searchQuery) ||
+                      transaction.type.toLowerCase().contains(_searchQuery);
+                }).toList();
+              }
 
-                final distributorTransactions = snapshot.data ?? [];
-                final allTransactions = [...clientTransactions, ...distributorTransactions];
+              if (_selectedFilter != 'all') {
+                transactions = transactions.where((transaction) {
+                  switch (_selectedFilter) {
+                    case 'sent':
+                      return transaction.isDebit;
+                    case 'received':
+                      return !transaction.isDebit && transaction.type != 'deposit';
+                    case 'deposit':
+                      return transaction.type == 'deposit';
+                    default:
+                      return true;
+                  }
+                }).toList();
+              }
 
-                allTransactions.sort((a, b) {
-                  final timestampA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp;
-                  final timestampB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp;
-                  return timestampB.compareTo(timestampA);
-                });
-
-                if (allTransactions.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        'Aucune transaction',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+              if (transactions.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'Aucune transaction trouvée',
+                      style: TextStyle(color: Colors.grey),
                     ),
-                  );
-                }
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: allTransactions.length,
-                  itemBuilder: (context, index) {
-                    final transaction = allTransactions[index].data() as Map<String, dynamic>;
-                    return _buildTransactionItem(transaction);
-                  },
+                  ),
                 );
-              },
-            );
-          },
+              }
+
+              return ListView.builder(
+                itemCount: transactions.length,
+                itemBuilder: (context, index) {
+                  final transaction = transactions[index];
+                  return _buildTransactionItem(transaction);
+                },
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTransactionItem(Map<String, dynamic> transaction) {
-    final isDebit = transaction['isDebit'] ?? false;
-    final amount = transaction['amount']?.toString() ?? '0';
-    final otherPartyName = isDebit
-        ? transaction['receiverName']
-        : transaction['senderName'];
-    final timestamp = transaction['timestamp'] as Timestamp?;
-
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.blue.shade50,
-        child: Icon(
-          isDebit ? Icons.arrow_upward : Icons.arrow_downward,
-          color: isDebit ? Colors.red : Colors.green,
+  Widget _buildTransactionItem(TransactionModel transaction) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TransactionDetailsScreen(
+              transaction: transaction,
+            ),
+          ),
+        );
+      },
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: transaction.isDebit ? Colors.red.shade50 : Colors.green.shade50,
+          child: Icon(
+            transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward,
+            color: transaction.isDebit ? Colors.red : Colors.green,
+          ),
         ),
-      ),
-      title: Text(isDebit
-          ? 'Envoyé à $otherPartyName'
-          : 'Reçu de $otherPartyName'
-      ),
-      subtitle: Text(
-          timestamp != null
-              ? _formatDate(timestamp.toDate())
-              : 'Date inconnue'
-      ),
-      trailing: Text(
-        '${isDebit ? '-' : '+'} $amount FCFA',
-        style: TextStyle(
-          color: isDebit ? Colors.red : Colors.green,
-          fontWeight: FontWeight.bold,
+        title: Text(
+            transaction.type == 'deposit'
+                ? 'Dépôt de ${transaction.distributorName ?? 'Distributeur'}'
+                : (transaction.isDebit
+                ? 'Envoyé à ${transaction.receiverName ?? 'Inconnu'}'
+                : 'Reçu de ${transaction.senderName ?? 'Inconnu'}')
+        ),
+        subtitle: Text(_formatDate(transaction.timestamp)),
+        trailing: Text(
+          '${transaction.isDebit ? '-' : '+'} ${transaction.amount.toStringAsFixed(0)} FCFA',
+          style: TextStyle(
+            color: transaction.isDebit ? Colors.red : Colors.green,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
@@ -535,4 +684,5 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return '${date.day}/${date.month}/${date.year}';
   }
+
 }

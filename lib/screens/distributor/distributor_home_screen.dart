@@ -6,6 +6,7 @@ import 'package:naffa_money/screens/distributor/deposit_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/distributor_model.dart';
+import 'distributor_transaction_details_screen.dart';
 
 class DistributorHomeScreen extends StatefulWidget {
   @override
@@ -188,8 +189,7 @@ class _DistributorHomeScreenState extends State<DistributorHomeScreen> {
               physics: NeverScrollableScrollPhysics(),
               itemCount: transactions.length,
               itemBuilder: (context, index) {
-                final transaction = transactions[index].data()
-                as Map<String, dynamic>;
+                final transaction = transactions[index].data() as Map<String, dynamic>;
                 return _buildTransactionItem(transaction);
               },
             );
@@ -205,29 +205,41 @@ class _DistributorHomeScreenState extends State<DistributorHomeScreen> {
     final timestamp = transaction['timestamp'] as Timestamp?;
     final userName = transaction['userName'] ?? 'Utilisateur';
 
-    return Card(
-      margin: EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isDeposit ? Colors.green.shade100 : Colors.blue.shade100,
-          child: Icon(
-            isDeposit ? Icons.add : Icons.remove,
-            color: isDeposit ? Colors.green : Colors.blue,
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DistributorTransactionDetailsScreen(
+              transaction: transaction,
+            ),
           ),
-        ),
-        title: Text(
-          isDeposit ? 'Dépôt de $userName' : 'Retrait pour $userName',
-        ),
-        subtitle: Text(
-            timestamp != null
-                ? _formatDate(timestamp.toDate())
-                : 'Date inconnue'
-        ),
-        trailing: Text(
-          '${isDeposit ? '+' : '-'} $amount FCFA',
-          style: TextStyle(
-            color: isDeposit ? Colors.green : Colors.blue,
-            fontWeight: FontWeight.bold,
+        );
+      },
+      child: Card(
+        margin: EdgeInsets.symmetric(vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: isDeposit ? Colors.green.shade100 : Colors.blue.shade100,
+            child: Icon(
+              isDeposit ? Icons.add : Icons.remove,
+              color: isDeposit ? Colors.green : Colors.blue,
+            ),
+          ),
+          title: Text(
+            isDeposit ? 'Dépôt de $userName' : 'Retrait pour $userName',
+          ),
+          subtitle: Text(
+              timestamp != null
+                  ? _formatDate(timestamp.toDate())
+                  : 'Date inconnue'
+          ),
+          trailing: Text(
+            '${isDeposit ? '+' : '-'} $amount FCFA',
+            style: TextStyle(
+              color: isDeposit ? Colors.green : Colors.blue,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),

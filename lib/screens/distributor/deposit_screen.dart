@@ -77,42 +77,64 @@ class _DistributorDepositScreenState extends State<DistributorDepositScreen> {
         throw Exception('Solde insuffisant pour effectuer le dépôt');
       }
 
-      // Créer la transaction dans Firestore
-      final transactionData = {
-        'type': _isDeposit ? 'deposit' : 'withdrawal',
-        'amount': depositAmount,
-        'distributorId': distributor.id,
-        'clientId': client.id,
-        'userName': client.name,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-      await _firestore.collection('transactions').add(transactionData);
+      // Générer un ID de transaction unique
+      final String transactionId = _firestore.collection('transactions').doc().id;
 
-      // Mettre à jour le solde du distributeur
-      distributor.balance -= depositAmount;
-      await _firestore
-          .collection('users')
-          .doc(_auth.currentUser!.uid)
-          .update({'balance': distributor.balance});
+      // Début de la transaction Firestore
+      await _firestore.runTransaction((transaction) async {
+        // Mettre à jour le solde du distributeur
+        transaction.update(
+            _firestore.collection('users').doc(_auth.currentUser!.uid),
+            {'balance': distributor.balance - depositAmount}
+        );
 
-      // Mettre à jour le solde du client
-      client.balance += depositAmount;
-      await _firestore
-          .collection('users')
-          .doc(client.id)
-          .update({'balance': client.balance});
+        // Mettre à jour le solde du client
+        transaction.update(
+            _firestore.collection('users').doc(client.id),
+            {'balance': client.balance + depositAmount}
+        );
 
-      await _addDepositTransaction(
-        distributorId: distributor.id,
-        clientId: client.id,
-        amount: depositAmount,
-      );
+        // Créer la transaction unique
+        final transactionData = {
+          'id': transactionId,
+          'type': 'deposit',
+          'amount': depositAmount,
+          'distributorId': distributor.id,
+          'distributorName': distributor.name,
+          'clientId': client.id,
+          'userName': client.name,
+          'timestamp': FieldValue.serverTimestamp(),
+          'status': 'completed',
+          'forDistributor': true,
+          'description': 'Dépôt effectué par ${distributor.name}'
+        };
+
+        // Utiliser l'ID généré pour créer le document
+        transaction.set(
+            _firestore.collection('transactions').doc(transactionId),
+            transactionData
+        );
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Dépôt effectué avec succès'),
+            content: Text('Dépôt effectué avec succès (ID: $transactionId)'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Copier ID',
+              textColor: Colors.white,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: transactionId));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('ID copié dans le presse-papiers'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ),
         );
         Navigator.pop(context);
@@ -131,22 +153,6 @@ class _DistributorDepositScreenState extends State<DistributorDepositScreen> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  Future<void> _addDepositTransaction({
-    required String distributorId,
-    required String clientId,
-    required double amount,
-  }) async {
-    final transactionData = {
-      'type': _isDeposit ? 'deposit' : 'withdrawal',
-      'amount': amount,
-      'distributorId': distributorId,
-      'clientId': clientId,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    await _firestore.collection('transactions').add(transactionData);
   }
 
   @override
