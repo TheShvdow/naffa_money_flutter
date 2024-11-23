@@ -1,11 +1,9 @@
-// lib/screens/profile/profile_screen.dart
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -13,24 +11,18 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key, required this.user}) : super(key: key);
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  _ProfileScreenState createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _passwordFormKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
-  final _currentPasswordController = TextEditingController();
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final ImagePicker _picker = ImagePicker();
-  bool _isLoading = false;
+  late TextEditingController _currentPasswordController;
+  late TextEditingController _newPasswordController;
   File? _imageFile;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -38,11 +30,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _nameController = TextEditingController(text: widget.user.name);
     _phoneController = TextEditingController(text: widget.user.phone);
     _emailController = TextEditingController(text: widget.user.email);
+    _currentPasswordController = TextEditingController();
+    _newPasswordController = TextEditingController();
   }
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(
+      final XFile? image = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         maxWidth: 512,
         maxHeight: 512,
@@ -55,7 +49,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
-      _showError('Erreur lors de la sélection de l\'image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la sélection de l\'image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -63,13 +62,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_imageFile == null) return null;
 
     try {
-      final String fileName = '${_auth.currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference ref = _storage.ref().child('profile_pictures/$fileName');
+      final String fileName = '${widget.user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference ref = FirebaseStorage.instance.ref().child('profile_pictures/$fileName');
 
       await ref.putFile(_imageFile!);
       return await ref.getDownloadURL();
     } catch (e) {
-      _showError('Erreur lors de l\'upload de l\'image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'upload de l\'image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return null;
     }
   }
@@ -85,139 +89,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
         imageUrl = await _uploadImage();
       }
 
-      final Map<String, dynamic> updates = {
-        'name': _nameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim(),
-      };
+      final updatedUser = UserModel(
+        id: widget.user.id,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        profilePicture: imageUrl ?? widget.user.profilePicture, // Correction ici
+        balance: widget.user.balance,
+        contacts: widget.user.contacts,
+      );
 
-      if (imageUrl != null) {
-        updates['profilePicture'] = imageUrl;
-      }
 
-      await _firestore
+      await FirebaseFirestore.instance
           .collection('users')
-          .doc(_auth.currentUser?.uid)
-          .update(updates);
+          .doc(widget.user.id)
+          .update(updatedUser.toJson());
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profil mis à jour avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil mis à jour avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      _showError('Erreur lors de la mise à jour: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la mise à jour du profil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() => _isLoading = false);
     }
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  void _showPasswordDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Changer le mot de passe'),
-        content: Form(
-          key: _passwordFormKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _currentPasswordController,
-                decoration: InputDecoration(
-                  labelText: 'Mot de passe actuel',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Entrez votre mot de passe actuel';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
-              TextFormField(
-                controller: _newPasswordController,
-                decoration: InputDecoration(
-                  labelText: 'Nouveau mot de passe',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Entrez un nouveau mot de passe';
-                  }
-                  if (value.length < 6) {
-                    return 'Le mot de passe doit contenir au moins 6 caractères';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
-              TextFormField(
-                controller: _confirmPasswordController,
-                decoration: InputDecoration(
-                  labelText: 'Confirmer le mot de passe',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-                validator: (value) {
-                  if (value != _newPasswordController.text) {
-                    return 'Les mots de passe ne correspondent pas';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
+  Future<void> _changePassword() async {
+    if (_currentPasswordController.text.isEmpty || _newPasswordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez remplir les champs de mot de passe.'),
+          backgroundColor: Colors.red,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: _updatePassword,
-            child: Text('Mettre à jour'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _updatePassword() async {
-    if (!_passwordFormKey.currentState!.validate()) return;
+      );
+      return;
+    }
 
     try {
-      final user = _auth.currentUser;
+      final user = FirebaseAuth.instance.currentUser;
+
+      // Authentifie l'utilisateur avec l'ancien mot de passe
       final credential = EmailAuthProvider.credential(
-        email: user!.email!,
-        password: _currentPasswordController.text,
+        email: widget.user.email,
+        password: _currentPasswordController.text.trim(),
       );
 
-      // Réauthentifier l'utilisateur
-      await user.reauthenticateWithCredential(credential);
+      await user!.reauthenticateWithCredential(credential);
 
-      // Mettre à jour le mot de passe
-      await user.updatePassword(_newPasswordController.text);
-
-      Navigator.pop(context); // Fermer le dialogue
+      // Met à jour le mot de passe
+      await user.updatePassword(_newPasswordController.text.trim());
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -225,21 +154,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: Colors.green,
         ),
       );
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'wrong-password':
-          message = 'Mot de passe actuel incorrect';
-          break;
-        case 'requires-recent-login':
-          message = 'Veuillez vous reconnecter pour effectuer cette opération';
-          break;
-        default:
-          message = 'Erreur: ${e.message}';
-      }
-      _showError(message);
+
+      // Réinitialise les champs
+      _currentPasswordController.clear();
+      _newPasswordController.clear();
     } catch (e) {
-      _showError('Erreur lors du changement de mot de passe: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors du changement de mot de passe: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -248,16 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mon Profil'),
-        actions: [
-          TextButton.icon(
-            icon: Icon(Icons.lock),
-            label: Text('Mot de passe'),
-            onPressed: _showPasswordDialog,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -265,7 +180,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           key: _formKey,
           child: Column(
             children: [
-              // Photo de profil
               GestureDetector(
                 onTap: _pickImage,
                 child: Stack(
@@ -275,20 +189,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       radius: 60,
                       backgroundImage: _imageFile != null
                           ? FileImage(_imageFile!)
-                          : (widget.user.profilePucture != null
-                          ? NetworkImage(widget.user.profilePucture!)
+                          : (widget.user.profilePicture.isNotEmpty // Correction ici
+                          ? NetworkImage(widget.user.profilePicture) // Correction ici
                           : null) as ImageProvider?,
-                      child: _imageFile == null && widget.user.profilePucture == null
-                          ? Icon(Icons.person, size: 60, color: Colors.white)
+                      child: _imageFile == null && widget.user.profilePicture.isEmpty
+                          ? const Icon(Icons.person, size: 60, color: Colors.white)
                           : null,
                     ),
                     Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
                         color: Colors.blue,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.camera_alt,
                         color: Colors.white,
                         size: 20,
@@ -297,10 +211,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              SizedBox(height: 24),
-
-              // Reste du formulaire...
-              // (Garder le reste du code du formulaire inchangé)
+              const SizedBox(height: 24),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nom',
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Entrez votre nom';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Téléphone',
+                  prefixIcon: Icon(Icons.phone),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Entrez votre numéro de téléphone';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.email),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Entrez votre adresse email';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _currentPasswordController,
+                decoration: const InputDecoration(
+                  labelText: 'Mot de passe actuel',
+                  prefixIcon: Icon(Icons.lock),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _newPasswordController,
+                decoration: const InputDecoration(
+                  labelText: 'Nouveau mot de passe',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _changePassword,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Changer le mot de passe'),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _updateProfile,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Mettre à jour le profil'),
+              ),
             ],
           ),
         ),
@@ -315,7 +301,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _emailController.dispose();
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 }

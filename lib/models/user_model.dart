@@ -3,38 +3,42 @@ class UserModel {
   final String name;
   final String phone;
   final String email;
-  final String profilePucture;
-  double balance;
-  List<String> contacts;
+  final String profilePicture; // Corrige cette propriété
+  final double balance;
+  final List<String> contacts;
 
   UserModel({
     required this.id,
     required this.name,
     required this.phone,
-    this.profilePucture='',
-    this.email = '',
-    this.balance = 0.0,
-    this.contacts = const [],
+    required this.email,
+    required this.profilePicture, // Corrige cette propriété
+    required this.balance,
+    required this.contacts,
   });
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'phone': phone,
-    'email': email,
-    'photo':profilePucture,
-    'balance': balance,
-    'contacts': contacts,
-    'type':'Client',
-  };
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'profilePicture': profilePicture, // Corrige cette propriété
+      'balance': balance,
+      'contacts': contacts,
+    };
+  }
 
-  factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
-    id: json['id'],
-    name: json['name'],
-    phone: json['phone'],
-    email: json['email'] ?? '',
-    profilePucture: json['profilePucture'] ?? '',
-    balance: json['balance']?.toDouble() ?? 0.0,
-    contacts: List<String>.from(json['contacts'] ?? []),
-  );
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'] ?? '', // Fournit une valeur par défaut vide
+      name: json['name'] ?? '', // Fournit une valeur par défaut vide
+      phone: json['phone'] ?? '', // Fournit une valeur par défaut vide
+      email: json['email'] ?? '', // Fournit une valeur par défaut vide
+      profilePicture: json['profilePicture'] ?? '', // Fournit une valeur par défaut vide
+      balance: (json['balance'] ?? 0).toDouble(), // Assure que `balance` est un double
+      contacts: List<String>.from(json['contacts'] ?? []), // Fournit une liste vide par défaut
+    );
+  }
+
 }

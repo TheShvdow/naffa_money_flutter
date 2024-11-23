@@ -46,6 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         email: _emailController.text.trim(),
+        profilePicture: '',
         balance: 0.0,
         contacts: [],
       );

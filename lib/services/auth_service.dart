@@ -238,6 +238,7 @@ class AuthService {
             id: userCredential.user!.uid,
             name: userCredential.user?.displayName ?? '',
             email: userCredential.user?.email ?? '',
+            profilePicture: '',
             phone: '',
             balance: 0.0,
             contacts: [],
@@ -277,6 +278,60 @@ class AuthService {
 
   // Obtenir l'utilisateur actuel
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required Function(PhoneAuthCredential) verificationCompleted,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(String, int?) codeSent,
+    required Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+      timeout: Duration(seconds: 60),
+    );
+  }
+
+  Future<UserCredential> signInWithPhone({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      final PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+      // Vérifier si l'utilisateur existe dans Firestore
+      final userDoc = await _firestore.collection('users').doc(userCredential.user?.uid).get();
+
+      if (!userDoc.exists) {
+        // Créer un nouveau document utilisateur
+        final user = UserModel(
+          id: userCredential.user!.uid,
+          name: userCredential.user?.displayName ?? 'Utilisateur',
+          email: userCredential.user?.email ?? '',
+          profilePicture: userCredential.user?.phoneNumber ?? '',
+          phone: '',
+          balance: 0.0,
+          contacts: [],
+        );
+
+        await _firestore.collection('users').doc(user.id).set(user.toJson());
+      }
+
+      return userCredential;
+    } catch (e) {
+      print('Erreur de connexion par téléphone: $e');
+      throw e;
+    }
+  }
 
   // Obtenir les données utilisateur de Firestore
   Future<UserModel?> getCurrentUserData() async {

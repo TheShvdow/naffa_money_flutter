@@ -5,20 +5,29 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../models/transaction_model.dart';
+import '../../services/transaction_service.dart';
 
-class TransactionDetailsScreen extends StatelessWidget {
+class TransactionDetailsScreen extends StatefulWidget {
   final TransactionModel transaction;
 
   const TransactionDetailsScreen({Key? key, required this.transaction}) : super(key: key);
 
+  @override
+  _TransactionDetailsScreenState createState() => _TransactionDetailsScreenState();
+}
+
+class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
+  final TransferService _transferService = TransferService();
+  bool _isCancelling = false;
+
   String _getTransactionTypeLabel() {
-    switch(transaction.type) {
+    switch (widget.transaction.type) {
       case 'transfer':
-        if (transaction.senderId != null && transaction.receiverId != null) {
+        if (widget.transaction.senderId != null && widget.transaction.receiverId != null) {
           return 'Transfert';
         }
         return 'Transfert d\'argent';
-      case 'multiple_transfert':
+      case 'multiple_transfer':
         return 'Transfert multiple';
       case 'failed_multiple_transfer':
         return 'Transfert multiple échoué';
@@ -32,34 +41,34 @@ class TransactionDetailsScreen extends StatelessWidget {
   }
 
   IconData _getTransactionIcon() {
-    switch(transaction.type) {
+    switch (widget.transaction.type) {
       case 'deposit':
         return Icons.account_balance_wallet;
       case 'withdrawal':
         return Icons.money_off;
-      case 'multiple_transfert':
+      case 'multiple_transfer':
         return Icons.people;
-      case 'failed_multiple_transfert':
+      case 'failed_multiple_transfer':
         return Icons.error_outline;
       case 'transfer':
-        return transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward;
+        return widget.transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward;
       default:
         return Icons.swap_horiz;
     }
   }
 
   String _getTransactionTitle() {
-    switch(transaction.type) {
+    switch (widget.transaction.type) {
       case 'deposit':
         return 'Dépôt';
       case 'withdrawal':
         return 'Retrait';
-      case 'multiple_transfert':
+      case 'multiple_transfer':
         return 'Transfert multiple';
-      case 'failed_multiple_transfert':
+      case 'failed_multiple_transfer':
         return 'Transfert échoué';
       case 'transfer':
-        return transaction.isDebit ? 'Envoyé' : 'Reçu';
+        return widget.transaction.isDebit ? 'Envoyé' : 'Reçu';
       default:
         return 'Transaction';
     }
@@ -171,7 +180,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                         pw.Container(
                           padding: pw.EdgeInsets.all(10),
                           child: pw.Text(
-                            transaction.transactionId ?? 'N/A',
+                            widget.transaction.transactionId ?? 'N/A',
                           ),
                         ),
                       ],
@@ -211,7 +220,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                         pw.Container(
                           padding: pw.EdgeInsets.all(10),
                           child: pw.Text(
-                            _formatDate(transaction.timestamp),
+                            _formatDate(widget.transaction.timestamp),
                           ),
                         ),
                       ],
@@ -234,7 +243,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                         pw.Container(
                           padding: pw.EdgeInsets.all(10),
                           child: pw.Text(
-                            '${transaction.amount.toStringAsFixed(0)} FCFA',
+                            '${widget.transaction.amount.toStringAsFixed(0)} FCFA',
                             style: pw.TextStyle(
                               fontWeight: pw.FontWeight.bold,
                             ),
@@ -243,9 +252,9 @@ class TransactionDetailsScreen extends StatelessWidget {
                       ],
                     ),
                     // Informations selon le type de transaction
-                    if (transaction.type == 'transfert' ||
-                        transaction.type == 'multiple_transfer' ||
-                        transaction.type == 'failed_multiple_transfer') ...[
+                    if (widget.transaction.type == 'transfert' ||
+                        widget.transaction.type == 'multiple_transfer' ||
+                        widget.transaction.type == 'failed_multiple_transfer') ...[
                       pw.TableRow(
                         children: [
                           pw.Container(
@@ -260,7 +269,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                           pw.Container(
                             padding: pw.EdgeInsets.all(10),
                             child: pw.Text(
-                              transaction.senderName ?? 'Non spécifié',
+                              widget.transaction.senderName ?? 'Non spécifié',
                             ),
                           ),
                         ],
@@ -279,13 +288,13 @@ class TransactionDetailsScreen extends StatelessWidget {
                           pw.Container(
                             padding: pw.EdgeInsets.all(10),
                             child: pw.Text(
-                              transaction.receiverName ?? 'Non spécifié',
+                              widget.transaction.receiverName ?? 'Non spécifié',
                             ),
                           ),
                         ],
                       ),
                     ],
-                    if (transaction.type == 'deposit' && transaction.distributorName != null)
+                    if (widget.transaction.type == 'deposit' && widget.transaction.distributorName != null)
                       pw.TableRow(
                         children: [
                           pw.Container(
@@ -299,7 +308,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                           ),
                           pw.Container(
                             padding: pw.EdgeInsets.all(10),
-                            child: pw.Text(transaction.distributorName!),
+                            child: pw.Text(widget.transaction.distributorName!),
                           ),
                         ],
                       ),
@@ -326,16 +335,93 @@ class TransactionDetailsScreen extends StatelessWidget {
     );
 
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/transaction_${transaction.id}.pdf');
+    final file = File('${dir.path}/transaction_${widget.transaction.id}.pdf');
     await file.writeAsBytes(await pdf.save());
     await Share.shareFiles(
       [file.path],
       text: 'Reçu de transaction Naffa Money',
     );
   }
+  void _showCancellationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,  // Empêcher la fermeture en tapant à l'extérieur
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Annuler le transfert'),
+          content: Text('Êtes-vous sûr de vouloir annuler ce transfert ?\n\nCette action est irréversible.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Non, garder'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _cancelTransfer();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Oui, annuler'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelTransfer() async {
+    if (widget.transaction.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Impossible d\'annuler : ID de transaction manquant'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      setState(() => _isCancelling = true);
+
+      await _transferService.cancelTransaction(widget.transaction.id!);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Transfert annulé avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.of(context).pop();  // Retour à l'écran précédent
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCancelling = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Vérifier si la transaction peut être annulée
+    final canCancel = widget.transaction.type == 'transfer' &&
+        widget.transaction.isDebit &&
+        DateTime.now().difference(widget.transaction.timestamp).inMinutes <= 30;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Détails de la transaction'),
@@ -355,10 +441,10 @@ class TransactionDetailsScreen extends StatelessWidget {
             Card(
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: transaction.isDebit ? Colors.red.shade50 : Colors.green.shade50,
+                  backgroundColor: widget.transaction.isDebit ? Colors.red.shade50 : Colors.green.shade50,
                   child: Icon(
                     _getTransactionIcon(),
-                    color: transaction.isDebit ? Colors.red : Colors.green,
+                    color: widget.transaction.isDebit ? Colors.red : Colors.green,
                   ),
                 ),
                 title: Text(
@@ -366,9 +452,9 @@ class TransactionDetailsScreen extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 trailing: Text(
-                  '${transaction.isDebit ? '-' : '+'} ${transaction.amount.toStringAsFixed(0)} FCFA',
+                  '${widget.transaction.isDebit ? '-' : '+'} ${widget.transaction.amount.toStringAsFixed(0)} FCFA',
                   style: TextStyle(
-                    color: transaction.isDebit ? Colors.red : Colors.green,
+                    color: widget.transaction.isDebit ? Colors.red : Colors.green,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -384,22 +470,22 @@ class TransactionDetailsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInfoRow('ID Transaction', transaction.id ?? 'N/A'),
+                    _buildInfoRow('ID Transaction', widget.transaction.id ?? 'N/A'),
                     Divider(),
                     _buildInfoRow('Type', _getTransactionTypeLabel()),
                     Divider(),
-                    _buildInfoRow('Date', _formatDate(transaction.timestamp)),
-                    if (transaction.type == 'transfert' ||
-                        transaction.type == 'multiple_transfer' ||
-                        transaction.type == 'failed_multiple_transfer') ...[
+                    _buildInfoRow('Date', _formatDate(widget.transaction.timestamp)),
+                    if (widget.transaction.type == 'transfer' ||
+                        widget.transaction.type == 'multiple_transfer' ||
+                        widget.transaction.type == 'failed_multiple_transfer') ...[
                       Divider(),
-                      _buildInfoRow('Expéditeur', transaction.senderName ?? 'Non spécifié'),
+                      _buildInfoRow('Expéditeur', widget.transaction.senderName ?? 'Non spécifié'),
                       Divider(),
-                      _buildInfoRow('Destinataire', transaction.receiverName ?? 'Non spécifié'),
+                      _buildInfoRow('Destinataire', widget.transaction.receiverName ?? 'Non spécifié'),
                     ],
-                    if (transaction.type == 'deposit' && transaction.distributorName != null) ...[
+                    if (widget.transaction.type == 'deposit' && widget.transaction.distributorName != null) ...[
                       Divider(),
-                      _buildInfoRow('Distributeur', transaction.distributorName!),
+                      _buildInfoRow('Distributeur', widget.transaction.distributorName!),
                     ],
                   ],
                 ),
@@ -408,16 +494,36 @@ class TransactionDetailsScreen extends StatelessWidget {
 
             SizedBox(height: 20),
 
-            // Bouton de téléchargement
-            Center(
-              child: ElevatedButton.icon(
-                icon: Icon(Icons.download),
-                label: Text('Télécharger le reçu'),
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            // Boutons d'action
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.download),
+                    label: Text('Télécharger le reçu'),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    onPressed: _generateAndSharePDF,
+                  ),
                 ),
-                onPressed: _generateAndSharePDF,
-              ),
+                if (canCancel) ...[
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: Icon(_isCancelling ? Icons.hourglass_empty : Icons.cancel),
+                      label: Text(_isCancelling ? 'Annulation...' : 'Annuler'),
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _isCancelling ? null : _showCancellationDialog,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

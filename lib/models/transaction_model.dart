@@ -1,3 +1,4 @@
+// lib/models/transaction_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionModel {
@@ -15,7 +16,7 @@ class TransactionModel {
   final bool isDebit;
   final String? distributorName;
   final String? distributorId;
-  final String? status;  // 'completed', 'failed', 'pending'
+  final String status;  // 'completed', 'failed', 'pending', 'cancelled'
   final String? failureReason;
   final List<dynamic>? failedTransfers;  // Pour stocker les transferts échoués dans un transfert multiple
   final List<dynamic>? successfulTransfers;  // Pour stocker les transferts réussis dans un transfert multiple
@@ -36,7 +37,7 @@ class TransactionModel {
     required this.isDebit,
     this.distributorName,
     this.distributorId,
-    this.status,
+    this.status = 'pending',
     this.failureReason,
     this.failedTransfers,
     this.successfulTransfers,
@@ -61,7 +62,7 @@ class TransactionModel {
           ? (json['timestamp'] as Timestamp).toDate()
           : DateTime.now(),
       isDebit: json['isDebit'] ?? false,
-      status: json['status']?.toString(),
+      status: json['status']?.toString() ?? 'pending',
       failureReason: json['failureReason']?.toString(),
       failedTransfers: json['failedTransfers'] as List<dynamic>?,
       successfulTransfers: json['successfulTransfers'] as List<dynamic>?,
