@@ -85,7 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
       'phone': userData['phone'],
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
-    return json.encode(qrData);
+    String jsonData = json.encode(qrData);
+    return jsonData;
   }
 
   Widget _buildBalanceAndQRSection(Map<String, dynamic> userData) {

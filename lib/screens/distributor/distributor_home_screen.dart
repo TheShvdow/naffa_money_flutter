@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/distributor_model.dart';
 import 'distributor_transaction_details_screen.dart';
+import 'dart:convert';
+import '../../services/transaction_service.dart';
 
 class DistributorHomeScreen extends StatefulWidget {
   @override
@@ -16,6 +18,169 @@ class DistributorHomeScreen extends StatefulWidget {
 class _DistributorHomeScreenState extends State<DistributorHomeScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final TransactionService _transferService = TransactionService();
+
+  Future<void> _scanQRCode(BuildContext context) async {
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => QRScannerScreen()),
+      );
+
+      if (result != null) {
+        // Décodage du QR en gérant les caractères spéciaux
+        String decodedResult = Uri.decodeFull(result.toString());
+        print('QR Code brut: $result'); // Pour le débogage
+        print('QR Code décodé: $decodedResult'); // Pour le débogage
+
+        Map<String, dynamic> qrData;
+        try {
+          qrData = json.decode(decodedResult);
+        } catch (e) {
+          throw Exception('Format de QR code invalide');
+        }
+
+        // Vérification des données requises
+        if (!qrData.containsKey('userId') || !qrData.containsKey('name')) {
+          throw Exception('Informations manquantes dans le QR code');
+        }
+
+        // Afficher un dialogue pour confirmer l'identité
+        bool? confirmed = await _showConfirmationDialog(
+            context,
+            name: qrData['name'],
+            phone: qrData['phone'] ?? 'Non spécifié'
+        );
+
+        if (confirmed == true) {
+          final amount = await _showAmountDialog(context);
+          if (amount != null && amount > 0) {
+            await _processWithdrawal(
+              clientId: qrData['userId'],
+              clientName: qrData['name'],
+              amount: amount,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<bool?> _showConfirmationDialog(BuildContext context, {
+    required String name,
+    required String phone,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Confirmer l\'identité'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Client: $name'),
+              SizedBox(height: 8),
+              Text('Téléphone: $phone'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: Text('Annuler'),
+              onPressed: () => Navigator.pop(context, false),
+            ),
+            ElevatedButton(
+              child: Text('Confirmer'),
+              onPressed: () => Navigator.pop(context, true),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  Future<double?> _showAmountDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    return showDialog<double>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Montant du retrait'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Montant',
+              suffixText: 'FCFA',
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Annuler'),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              child: Text('Confirmer'),
+              onPressed: () {
+                final amount = double.tryParse(controller.text);
+                Navigator.pop(context, amount);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _processWithdrawal({
+    required String clientId,
+    required String clientName,
+    required double amount,
+  }) async {
+    try {
+      final distributorId = _auth.currentUser?.uid;
+      final distributorDoc = await _firestore
+          .collection('users')
+          .doc(distributorId)
+          .get();
+
+      if (!distributorDoc.exists) {
+        throw Exception('Erreur distributeur');
+      }
+
+      final distributorData = distributorDoc.data()!;
+      await _transferService.processWithdrawal(
+        distributorId: distributorId!,
+        clientId: clientId,
+        clientName: clientName,
+        amount: amount,
+        distributorName: distributorData['name'],
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Retrait effectué avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,12 +278,10 @@ class _DistributorHomeScreenState extends State<DistributorHomeScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => QRScannerScreen(),
-              ),
-            ),
+            // Correction ici : on utilise une fonction anonyme qui ne retourne rien
+            onPressed: () async {
+              await _scanQRCode(context);
+            },
           ),
         ),
         SizedBox(width: 16),

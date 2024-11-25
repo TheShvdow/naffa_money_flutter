@@ -48,7 +48,7 @@ class TransactionModel {
     return TransactionModel(
       id: json['id']?.toString(),
       transactionId: json['transactionId']?.toString(),
-      type: json['type'] ?? 'transfer',
+      type: json['type'] ?? 'transfert',
       amount: (json['amount'] ?? 0.0).toDouble(),
       senderId: json['senderId']?.toString(),
       senderName: json['senderName']?.toString(),

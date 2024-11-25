@@ -17,20 +17,24 @@ class TransactionDetailsScreen extends StatefulWidget {
 }
 
 class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
-  final TransferService _transferService = TransferService();
+  final TransactionService _transferService = TransactionService();
   bool _isCancelling = false;
 
   String _getTransactionTypeLabel() {
     switch (widget.transaction.type) {
-      case 'transfer':
+      case 'transfert':
         if (widget.transaction.senderId != null && widget.transaction.receiverId != null) {
-          return 'Transfert';
+          return 'Transfert d\'argent';
         }
         return 'Transfert d\'argent';
-      case 'multiple_transfer':
+      case 'transfert multiple':
         return 'Transfert multiple';
       case 'failed_multiple_transfer':
         return 'Transfert multiple échoué';
+      case 'transfert programmé':
+        return 'Transfert programmé';
+      case 'failed_schedule_transfer':
+        return 'Transfert programmé échoué';
       case 'deposit':
         return 'Dépôt d\'argent';
       case 'withdrawal':
@@ -46,11 +50,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         return Icons.account_balance_wallet;
       case 'withdrawal':
         return Icons.money_off;
-      case 'multiple_transfer':
+      case 'transfert multiple':
         return Icons.people;
       case 'failed_multiple_transfer':
         return Icons.error_outline;
-      case 'transfer':
+      case 'transfert':
         return widget.transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward;
       default:
         return Icons.swap_horiz;
@@ -63,11 +67,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         return 'Dépôt';
       case 'withdrawal':
         return 'Retrait';
-      case 'multiple_transfer':
+      case 'transfert ':
         return 'Transfert multiple';
       case 'failed_multiple_transfer':
         return 'Transfert échoué';
-      case 'transfer':
+      case 'transfert':
         return widget.transaction.isDebit ? 'Envoyé' : 'Reçu';
       default:
         return 'Transaction';
@@ -418,9 +422,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     // Vérifier si la transaction peut être annulée
-    final canCancel = widget.transaction.type == 'transfer' &&
+    final canCancel = widget.transaction.type == 'transfert' &&
         widget.transaction.isDebit &&
-        DateTime.now().difference(widget.transaction.timestamp).inMinutes <= 30;
+        DateTime.now().difference(widget.transaction.timestamp).inMinutes <= 30 &&
+        widget.transaction.status != 'completed' &&  // Vérifier que le destinataire n'a pas déjà retiré l'argent
+        widget.transaction.status != 'withdrawn'; // Exemple de statut indiquant que le destinataire a retiré l'argent
 
     return Scaffold(
       appBar: AppBar(
@@ -475,8 +481,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                     _buildInfoRow('Type', _getTransactionTypeLabel()),
                     Divider(),
                     _buildInfoRow('Date', _formatDate(widget.transaction.timestamp)),
-                    if (widget.transaction.type == 'transfer' ||
-                        widget.transaction.type == 'multiple_transfer' ||
+                    Divider(),
+                    _buildInfoRow('Status', widget.transaction.status),
+                    if (widget.transaction.type == 'transfert' ||
+                        widget.transaction.type == 'transfert multiple' ||
                         widget.transaction.type == 'failed_multiple_transfer') ...[
                       Divider(),
                       _buildInfoRow('Expéditeur', widget.transaction.senderName ?? 'Non spécifié'),
@@ -530,4 +538,5 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       ),
     );
   }
+
 }

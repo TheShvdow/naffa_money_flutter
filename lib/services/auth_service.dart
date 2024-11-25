@@ -1,15 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import '../models/user_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FacebookAuth _facebookAuth = FacebookAuth.instance;
 
 
   // Singleton pattern
@@ -195,13 +192,11 @@ class AuthService {
       return null;
     }
   }
-  Future<UserCredential?> signInWithGoogle() async {
+  Future<UserCredential> signInWithGoogle() async {
     try {
-      // Déconnexion préalable pour éviter les conflits
       await _googleSignIn.signOut();
       await _auth.signOut();
 
-      // Déclencher le flux de connexion Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -211,55 +206,62 @@ class AuthService {
         );
       }
 
-      // Obtenir les détails d'authentification
-      try {
-        final GoogleSignInAuthentication googleAuth =
-        await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
 
-        // Créer les credentials Firebase
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      print("Firebase User ID: ${userCredential.user?.uid}");
 
-        // Connexion à Firebase
-        final UserCredential userCredential =
-        await _auth.signInWithCredential(credential);
+      // Créer ou mettre à jour l'utilisateur dans Firestore
+      await _firestore
+          .collection('users')
+          .doc(userCredential.user?.uid)
+          .set({
+        'id': userCredential.user?.uid,
+        'name': userCredential.user?.displayName ?? '',
+        'email': userCredential.user?.email ?? '',
+        'profilePicture': userCredential.user?.photoURL ?? '',
+        'phone': '', // téléphone vide par défaut
+        'balance': 0.0,
+        'contacts': [],
+      }, SetOptions(merge: true)); // merge: true permet de ne pas écraser les données existantes
 
-        // Vérifier si l'utilisateur existe dans Firestore
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(userCredential.user?.uid)
-            .get();
-
-        if (!userDoc.exists) {
-          // Créer un nouveau document utilisateur
-          final user = UserModel(
-            id: userCredential.user!.uid,
-            name: userCredential.user?.displayName ?? '',
-            email: userCredential.user?.email ?? '',
-            profilePicture: '',
-            phone: '',
-            balance: 0.0,
-            contacts: [],
-          );
-
-          await _firestore
-              .collection('users')
-              .doc(user.id)
-              .set(user.toJson());
-        }
-
-        return userCredential;
-      } catch (e) {
-        print('Google Auth Error: $e');
-        throw FirebaseAuthException(
-          code: 'ERROR_GOOGLE_AUTH',
-          message: 'Failed to authenticate with Google: $e',
-        );
-      }
+      return userCredential;
     } catch (e) {
-      print('Sign In Error: $e');
+      print('Google Sign In Error: $e');
+      rethrow;
+    }
+  }
+
+  // Mise à jour du numéro de téléphone
+  Future<void> updateUserPhoneNumber(String userId, String phoneNumber) async {
+    try {
+      String formattedPhone = phoneNumber.replaceAll(' ', '');
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+221${formattedPhone.startsWith('221') ? formattedPhone.substring(3) : formattedPhone}';
+      }
+
+      // Vérifier si le numéro existe déjà
+      final QuerySnapshot existingPhone = await _firestore
+          .collection('users')
+          .where('phone', isEqualTo: formattedPhone)
+          .get();
+
+      if (existingPhone.docs.isNotEmpty) {
+        throw Exception('Ce numéro de téléphone est déjà utilisé');
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .update({'phone': formattedPhone});
+
+      print('Numéro de téléphone mis à jour avec succès: $formattedPhone');
+    } catch (e) {
+      print('Erreur lors de la mise à jour du numéro: $e');
       rethrow;
     }
   }

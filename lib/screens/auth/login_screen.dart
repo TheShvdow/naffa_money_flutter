@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import 'PhoneCollectionScreen.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -16,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
 
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
   bool _isPhoneLogin = true;
 
@@ -47,28 +49,43 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
+  Future<void> handleGoogleSignIn() async {
+    setState(() => _isGoogleLoading = true);
+    print("Démarrage de la connexion Google");
+
     try {
-      setState(() => _isLoading = true);
+      final result = await _authService.signInWithGoogle();
+      print("Résultat de la connexion Google: ${result.user?.uid}");
 
-      final userCredential = await _authService.signInWithGoogle();
-
-      if (!mounted) return;
-
-      if (userCredential?.user != null) {
-        // La navigation sera gérée automatiquement par le StreamBuilder
-        print('Connexion Google réussie');
+      if (mounted) {
+        print("Navigation vers PhoneCollectionScreen");
+        // Forcer la navigation vers PhoneCollectionScreen
+        await Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => PhoneCollectionScreen(
+              userId: result.user!.uid,
+            ),
+          ),
+              (route) => false,
+        );
       }
     } catch (e) {
+      print("Erreur de connexion Google: $e");
       if (mounted) {
-        _showError(e.toString());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de connexion: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isGoogleLoading = false);
       }
     }
   }
+
 
   void _showError(String message) {
     if (!mounted) return;
@@ -282,18 +299,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         // Bouton Google
                         OutlinedButton.icon(
-                          icon: Image.asset(
+                          icon: _isGoogleLoading
+                              ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                            ),
+                          )
+                              : Image.asset(
                             'assets/google.png',
                             height: 24,
                           ),
-                          label: Text('Continuer avec Google'),
+                          label: Text(_isGoogleLoading ? 'Connexion en cours...' : 'Continuer avec Google'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: Size(double.infinity, 50),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          onPressed: _isLoading ? null : _handleGoogleSignIn,
+                          onPressed: (_isLoading || _isGoogleLoading) ? null : handleGoogleSignIn,
                         ),
                         SizedBox(height: 20),
 

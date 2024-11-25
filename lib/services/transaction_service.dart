@@ -1,10 +1,14 @@
 // lib/services/transfer_service.dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/distributor_model.dart';
+import '../models/scheduled_transfert.dart';
 import '../models/transaction_model.dart';
 import '../models/user_model.dart';
 import 'package:uuid/uuid.dart';
 
-class TransferService {
+class TransactionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> transferMoney({
@@ -12,7 +16,6 @@ class TransferService {
     required String senderUid,
     required String receiverPhone,
     required double amount,
-    String? description,
   }) async {
     // Démarrer une transaction Firestore
     return await _firestore.runTransaction((transaction) async {
@@ -42,7 +45,7 @@ class TransferService {
 
         // Convertir les données en modèle utilisateur
         final sender = UserModel.fromJson(senderDoc.data()!);
-        final receiver = UserModel.fromJson(receiverDoc.data()!);
+        final receiver = UserModel.fromJson(receiverDoc.data());
 
         // Vérifier le solde
         if (sender.balance < amount) {
@@ -68,7 +71,7 @@ class TransferService {
         final transactionData = TransactionModel(
           id: const Uuid().v4(),
           transactionId: transactionId,
-          type: 'transfer',
+          type: 'transfert',
           amount: amount,
           senderId: senderUid,
           senderName: sender.name,
@@ -115,7 +118,7 @@ class TransferService {
           // Transaction pour l'émetteur (débit)
           var senderTransactionData = TransactionModel(
             transactionId: transactionId,
-            type: 'multiple_transfer',
+            type: 'transfert multiple',
             amount: receiverAmount,
             senderId: senderUid,
             senderName: sender.name,
@@ -217,7 +220,6 @@ class TransferService {
     required String senderUid,
     required String receiverPhone,
     required double amount,
-    required String description,
     required DateTime scheduleDate,
   }) async {
     // Démarrer une transaction Firestore
@@ -267,7 +269,7 @@ class TransferService {
         // Créer la transaction programmée
         final transactionData = TransactionModel(
           transactionId: const Uuid().v4(),
-          type: 'transfer',
+          type: 'transfert programmé',
           amount: amount,
           senderId: senderUid,
           senderName: sender.name,
@@ -308,6 +310,7 @@ class TransferService {
       receiverName: receiverName,
       timestamp: DateTime.now(),
       isDebit: isDebit,
+
     ).toJson();
 
     await _firestore.collection('transactions').add(transactionData);
@@ -349,7 +352,7 @@ class TransferService {
   }
   Future<void> cancelTransaction(String transactionId) async {
     try {
-      // D'abord, chercher la transaction par le transactionId
+      // Recherche de la transaction
       final QuerySnapshot transactionQuery = await _firestore
           .collection('transactions')
           .where('id', isEqualTo: transactionId)
@@ -363,7 +366,7 @@ class TransferService {
       final transactionDoc = transactionQuery.docs.first;
       final transactionData = transactionDoc.data() as Map<String, dynamic>;
 
-      // Vérifications
+      // Vérifications avant la transaction
       final now = DateTime.now();
       final createdAt = (transactionData['timestamp'] as Timestamp).toDate();
       if (now.difference(createdAt).inMinutes > 30) {
@@ -374,45 +377,114 @@ class TransferService {
         throw Exception('Cette transaction ne peut plus être annulée');
       }
 
+      // Récupérer les références des utilisateurs avant d'écrire
+      final senderRef = _firestore.collection('users').doc(transactionData['senderId']);
+      final receiverRef = _firestore.collection('users').doc(transactionData['receiverId']);
+
+      final senderSnapshot = await senderRef.get();
+      final receiverSnapshot = await receiverRef.get();
+
+      if (!senderSnapshot.exists || !receiverSnapshot.exists) {
+        throw Exception('L\'expéditeur ou le destinataire est introuvable');
+      }
+
+      final senderData = senderSnapshot.data() as Map<String, dynamic>;
+      final receiverData = receiverSnapshot.data() as Map<String, dynamic>;
+
+      // Exécuter la transaction
       await _firestore.runTransaction((transaction) async {
-        // Récupérer les documents de l'expéditeur et du destinataire
-        final senderRef = _firestore.collection('users').doc(transactionData['senderId']);
-        final senderDoc = await transaction.get(senderRef);
+        final updatedSenderBalance = senderData['balance'] + transactionData['amount'];
+        final updatedReceiverBalance = receiverData['balance'] - transactionData['amount'];
 
-        if (!senderDoc.exists) {
-          throw Exception('Expéditeur non trouvé');
-        }
+        // Mise à jour des balances
+        transaction.update(senderRef, {'balance': updatedSenderBalance});
+        transaction.update(receiverRef, {'balance': updatedReceiverBalance});
 
-        final amount = (transactionData['amount'] as num).toDouble();
-        final currentSenderBalance = (senderDoc.data()?['balance'] as num).toDouble();
-
-        // Rembourser l'expéditeur
-        transaction.update(senderRef, {
-          'balance': currentSenderBalance + amount
-        });
-
-        // Si le destinataire existe, mettre à jour son solde
-        if (transactionData['receiverId'] != null) {
-          final receiverRef = _firestore.collection('users').doc(transactionData['receiverId']);
-          final receiverDoc = await transaction.get(receiverRef);
-
-          if (receiverDoc.exists) {
-            final currentReceiverBalance = (receiverDoc.data()?['balance'] as num).toDouble();
-            transaction.update(receiverRef, {
-              'balance': currentReceiverBalance - amount
-            });
-          }
-        }
-
-        // Mettre à jour le statut de la transaction
-        transaction.update(transactionDoc.reference, {
-          'status': 'cancelled',
-          'cancelledAt': FieldValue.serverTimestamp(),
-        });
+        // Mise à jour du statut de la transaction
+        transaction.update(transactionDoc.reference, {'status': 'cancelled'});
       });
     } catch (e) {
-      print('Erreur lors de l\'annulation: $e');
-      throw Exception(e.toString());
+      throw Exception('Erreur lors de l\'annulation : ${e.toString()}');
     }
   }
+
+  Future<void> processWithdrawal({
+    required String distributorId,
+    required String clientId,
+    required String clientName,
+    required double amount,
+    required String distributorName,
+  }) async {
+    return await _firestore.runTransaction((transaction) async {
+      try {
+        // Récupérer les documents du client et du distributeur
+        final clientDoc = await transaction.get(
+          _firestore.collection('users').doc(clientId),
+        );
+        final distributorDoc = await transaction.get(
+          _firestore.collection('users').doc(distributorId),
+        );
+
+        if (!clientDoc.exists || !distributorDoc.exists) {
+          throw Exception('Utilisateur ou distributeur non trouvé');
+        }
+
+        final client = UserModel.fromJson(clientDoc.data()!);
+        final distributor = DistributorModel.fromJson(distributorDoc.data()!);
+
+        // Vérifier les soldes
+        if (client.balance < amount) {
+          throw Exception('Solde client insuffisant');
+        }
+
+        if (distributor.balance < amount) {
+          throw Exception('Solde distributeur insuffisant');
+        }
+
+        // Mettre à jour les soldes
+        final newClientBalance = client.balance - amount;
+        final newDistributorBalance = distributor.balance + amount;
+
+        transaction.update(clientDoc.reference, {'balance': newClientBalance});
+        transaction.update(distributorDoc.reference, {'balance': newDistributorBalance});
+
+        // Créer la transaction
+        final withdrawalData = TransactionModel(
+          id: const Uuid().v4(),
+          type: 'withdrawal',
+          amount: amount,
+          senderId: clientId,
+          senderName: client.name,
+          receiverId: distributorId,
+          receiverName: distributorName,
+          timestamp: DateTime.now(),
+          isDebit: true,
+          status: 'completed',
+          distributorId: distributorId,
+          distributorName: distributorName,
+        ).toJson();
+
+        transaction.set(
+          _firestore.collection('transactions').doc(),
+          withdrawalData,
+        );
+      } catch (e) {
+        print('Erreur pendant le retrait: $e');
+        rethrow;
+      }
+    });
+  }
+
+  Future<void> scheduleTransfer(ScheduledTransfer transfer) async {
+    final response = await http.post(
+      Uri.parse('https://your-laravel-app.com/api/scheduled-transfers'),
+      body: jsonEncode(transfer.toJson()),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Échec de la programmation du transfert');
+    }
+  }
+
 }
