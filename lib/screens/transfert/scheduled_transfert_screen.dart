@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:naffa_money/services/transaction_service.dart';
 import 'package:naffa_money/services/auth_service.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../models/scheduled_transfert.dart';
 
 class ScheduledTransferScreen extends StatefulWidget {
   @override
@@ -56,7 +59,6 @@ class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
       }
     }
   }
-
   Future<void> _handleScheduledTransfer() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -68,18 +70,24 @@ class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
         throw Exception('Utilisateur non connecté');
       }
 
-      final scheduleDate = _selectedDateTime; // Utiliser la date et l'heure sélectionnées
-
+      final scheduleDate = _selectedDateTime;
       if (scheduleDate == null) {
         throw Exception('Date et heure de programmation invalides');
       }
 
-      await _transferService.transferScheduled(
+      final String transactionId = const Uuid().v4();
+      final scheduledTransfer = ScheduledTransfer(
+        id: transactionId,
+        transactionId: transactionId,
         senderUid: currentUser.id,
-        receiverPhone: _phoneController.text.trim(),
+        recipientPhone: _phoneController.text.trim(),
         amount: double.parse(_amountController.text.replaceAll(' ', '')),
-        scheduleDate: scheduleDate,
+        frequency: 'monthly', // Ou autre fréquence sélectionnée
+        scheduledTime: scheduleDate,
       );
+
+      await _transferService.scheduleTransfer(scheduledTransfer);
+      await _transferService.processTransactionsSchedule();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

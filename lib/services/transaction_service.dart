@@ -221,74 +221,24 @@ class TransactionService {
     required String receiverPhone,
     required double amount,
     required DateTime scheduleDate,
+    required String frequency, // 'daily', 'weekly', 'monthly'
   }) async {
-    // Démarrer une transaction Firestore
-    return await _firestore.runTransaction((transaction) async {
-      try {
-        // Obtenir le document de l'utilisateur émetteur
-        final senderDoc = await transaction.get(
-          _firestore.collection('users').doc(senderUid),
-        );
+    // Générer un ID unique pour la transaction programmée
+    final String transactionId = const Uuid().v4();
 
-        // Convertir les données de l'émetteur en modèle utilisateur
-        final sender = UserModel.fromJson(senderDoc.data()!);
+    // Créer l'objet ScheduledTransfer
+    final scheduledTransfer = ScheduledTransfer(
+      id: transactionId,
+      transactionId: transactionId,
+      senderUid: senderUid,
+      recipientPhone: receiverPhone,
+      amount: amount,
+      frequency: frequency,
+      scheduledTime: scheduleDate,
+    );
 
-        // Vérifier que l'émetteur a un solde suffisant
-        if (sender.balance < amount) {
-          throw Exception('Solde insuffisant');
-        }
-
-        // Trouver le destinataire par numéro de téléphone
-        final receiverQuery = await _firestore
-            .collection('users')
-            .where('phone', isEqualTo: receiverPhone)
-            .limit(1)
-            .get();
-
-        if (receiverQuery.docs.isEmpty) {
-          throw Exception('Destinataire non trouvé');
-        }
-
-        final receiverDoc = receiverQuery.docs.first;
-        final receiver = UserModel.fromJson(receiverDoc.data());
-
-        // Mettre à jour le solde du destinataire
-        final newReceiverBalance = receiver.balance + amount;
-        transaction.update(
-          receiverDoc.reference,
-          {'balance': newReceiverBalance},
-        );
-
-        // Mettre à jour le solde de l'émetteur
-        final newSenderBalance = sender.balance - amount;
-        transaction.update(
-          senderDoc.reference,
-          {'balance': newSenderBalance},
-        );
-
-        // Créer la transaction programmée
-        final transactionData = TransactionModel(
-          transactionId: const Uuid().v4(),
-          type: 'transfert programmé',
-          amount: amount,
-          senderId: senderUid,
-          senderName: sender.name,
-          receiverId: receiverDoc.id,
-          receiverName: receiver.name,
-          timestamp: scheduleDate,
-          isDebit: true,
-          status: 'pending',
-        ).toJson();
-
-        transaction.set(
-          _firestore.collection('transactions').doc(),
-          transactionData,
-        );
-      } catch (e) {
-        print('Erreur pendant le transfert programmé: $e');
-        rethrow;
-      }
-    });
+    // Envoyer le transfert programmé à l'API Laravel
+    await scheduleTransfer(scheduledTransfer);
   }
 
   Future<void> createTransaction({
@@ -477,7 +427,7 @@ class TransactionService {
 
   Future<void> scheduleTransfer(ScheduledTransfer transfer) async {
     final response = await http.post(
-      Uri.parse('https://your-laravel-app.com/api/scheduled-transfers'),
+      Uri.parse('http://localhost:8000/api/schedule-transfer'),
       body: jsonEncode(transfer.toJson()),
       headers: {'Content-Type': 'application/json'},
     );
@@ -485,6 +435,130 @@ class TransactionService {
     if (response.statusCode != 200) {
       throw Exception('Échec de la programmation du transfert');
     }
+  }
+
+  Future<void> processTransactions() async {
+    try {
+      // Get all pending transactions
+      final QuerySnapshot transactionSnapshot = await _firestore
+          .collection('transactions')
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      for (final transactionDoc in transactionSnapshot.docs) {
+        final transactionData = transactionDoc.data() as Map<String, dynamic>;
+        final timestamp = (transactionData['timestamp'] as Timestamp).toDate();
+        final now = DateTime.now();
+
+        // Check if 30 minutes have passed since the transaction was created
+        if (now.difference(timestamp).inMinutes >= 30) {
+          // Update the transaction status to "completed"
+          await _firestore.collection('transactions').doc(transactionDoc.id).update({
+            'status': 'completed',
+          });
+
+          // Update the balances for the sender and receiver
+          final senderRef = _firestore.collection('users').doc(transactionData['senderId']);
+          final receiverRef = _firestore.collection('users').doc(transactionData['receiverId']);
+
+          final senderSnapshot = await senderRef.get();
+          final receiverSnapshot = await receiverRef.get();
+
+          final senderData = senderSnapshot.data() as Map<String, dynamic>;
+          final receiverData = receiverSnapshot.data() as Map<String, dynamic>;
+
+          final updatedSenderBalance = senderData['balance'] + transactionData['amount'];
+          final updatedReceiverBalance = receiverData['balance'] - transactionData['amount'];
+
+          await _firestore.runTransaction((transaction) async {
+            transaction.update(senderRef, {'balance': updatedSenderBalance});
+            transaction.update(receiverRef, {'balance': updatedReceiverBalance});
+          });
+        }
+      }
+    } catch (e) {
+      print('Error processing transactions: $e');
+    }
+  }
+  Future<void> processTransactionsSchedule() async {
+    try {
+      // Récupérer les transactions programmées en attente
+      final QuerySnapshot transactionSnapshot = await _firestore
+          .collection('transactions')
+          .where('status', isEqualTo: 'pending')
+          .where('type', isEqualTo: 'scheduled_transfer')
+          .get();
+
+      for (final transactionDoc in transactionSnapshot.docs) {
+        final transactionData = transactionDoc.data() as Map<String, dynamic>;
+        final timestamp = (transactionData['timestamp'] as Timestamp).toDate();
+        final now = DateTime.now();
+
+        // Vérifier la fréquence du transfert programmé
+        switch (transactionData['frequency']) {
+          case 'daily':
+            if (now.difference(timestamp).inDays >= 1) {
+              await _processScheduledTransfer(transactionDoc.id);
+            }
+            break;
+          case 'weekly':
+            if (now.difference(timestamp).inDays >= 7) {
+              await _processScheduledTransfer(transactionDoc.id);
+            }
+            break;
+          case 'monthly':
+            if (now.difference(timestamp).inDays >= 30) {
+              await _processScheduledTransfer(transactionDoc.id);
+            }
+            break;
+        }
+      }
+    } catch (e) {
+      print('Erreur lors du traitement des transactions : $e');
+    }
+  }
+  Future<void> _processScheduledTransfer(String transactionId) async {
+    // Récupérer les détails de la transaction programmée
+    final QuerySnapshot transactionSnapshot = await _firestore
+        .collection('transactions')
+        .where('transactionId', isEqualTo: transactionId)
+        .limit(1)
+        .get();
+
+    if (transactionSnapshot.docs.isNotEmpty) {
+      final transactionData = transactionSnapshot.docs.first.data() as Map<String, dynamic>;
+
+      // Mettre à jour le solde des comptes
+      await _updateAccountBalances(
+        transactionData['senderId'],
+        transactionData['receiverId'],
+        transactionData['amount'],
+      );
+
+      // Mettre à jour le statut de la transaction à "completed"
+      await _firestore.collection('transactions').doc(transactionSnapshot.docs.first.id).update({
+        'status': 'completed',
+      });
+    }
+  }
+  Future<void> _updateAccountBalances(String senderId, String receiverId, double amount) async {
+    // Mettre à jour les soldes des comptes dans Firestore
+    final senderRef = _firestore.collection('users').doc(senderId);
+    final receiverRef = _firestore.collection('users').doc(receiverId);
+
+    await _firestore.runTransaction((transaction) async {
+      final senderSnapshot = await transaction.get(senderRef);
+      final receiverSnapshot = await transaction.get(receiverRef);
+
+      final senderData = senderSnapshot.data() as Map<String, dynamic>;
+      final receiverData = receiverSnapshot.data() as Map<String, dynamic>;
+
+      final updatedSenderBalance = senderData['balance'] - amount;
+      final updatedReceiverBalance = receiverData['balance'] + amount;
+
+      transaction.update(senderRef, {'balance': updatedSenderBalance});
+      transaction.update(receiverRef, {'balance': updatedReceiverBalance});
+    });
   }
 
 }

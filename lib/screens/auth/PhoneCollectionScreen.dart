@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart' show AppBar, BorderRadius, BuildContext, CircularProgressIndicator, Colors, Column, CrossAxisAlignment, EdgeInsets, ElevatedButton, Form, FormState, GlobalKey, Icon, Icons, InputDecoration, Key, MainAxisAlignment, MaterialPageRoute, Navigator, OutlineInputBorder, Padding, RoundedRectangleBorder, Row, Scaffold, ScaffoldMessenger, Size, SizedBox, SnackBar, State, StatefulWidget, Text, TextAlign, TextEditingController, TextFormField, TextInputType, Theme, Widget;
 import '../../services/auth_service.dart';
 import '../home/home_screen.dart';
@@ -23,33 +24,48 @@ class _PhoneCollectionScreenState extends State<PhoneCollectionScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.updateUserPhoneNumber(
-        widget.userId,
-        _phoneController.text.trim(),
-      );
+      String phoneNumber = _phoneController.text.trim();
 
-      if (!mounted) return;
+      // Formater le numéro
+      phoneNumber = phoneNumber.replaceAll(' ', '');
+      if (!phoneNumber.startsWith('+')) {
+        phoneNumber = '+221${phoneNumber.startsWith('221') ? phoneNumber.substring(3) : phoneNumber}';
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Numéro de téléphone enregistré avec succès'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      print('Saving phone number: $phoneNumber'); // Debug print
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
-      );
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .set({
+        'phone': phoneNumber,
+      }, SetOptions(merge: true));
+
+      print('Phone number saved successfully'); // Debug print
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Numéro de téléphone enregistré avec succès'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => HomeScreen()),
+              (route) => false,
+        );
+      }
     } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Error saving phone number: $e'); // Debug print
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

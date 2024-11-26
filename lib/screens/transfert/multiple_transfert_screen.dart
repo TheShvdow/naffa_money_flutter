@@ -76,6 +76,7 @@
           receivers: receivers,
           amounts: amounts,
         );
+        await _transferService.processTransactions();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -86,6 +87,7 @@
           );
           Navigator.pop(context);
         }
+
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

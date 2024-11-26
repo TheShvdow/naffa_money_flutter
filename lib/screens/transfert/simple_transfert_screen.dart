@@ -49,6 +49,7 @@ class _SimpleTransferScreenState extends State<SimpleTransferScreen> {
         receiverPhone: _phoneController.text.trim(),
         amount: double.parse(_amountController.text.replaceAll(' ', '')),
       );
+      await _transferService.processTransactions();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -73,6 +74,7 @@ class _SimpleTransferScreenState extends State<SimpleTransferScreen> {
         );
         Navigator.pop(context);
       }
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
