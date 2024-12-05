@@ -17,6 +17,7 @@ class AuthService {
 
 
 
+
   Future<UserCredential?> signInWithPhoneOrEmail(
       String identifier,
       String password,
@@ -129,6 +130,32 @@ class AuthService {
     }
   }
 
+  Future<void> createOrUpdateUserProfile(User user) async {
+    try {
+      final userRef = _firestore.collection('users').doc(user.uid);
+      final userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        await userRef.set({
+          'email': user.email,
+          'name': user.displayName,
+          'id': user.uid,
+        });
+      } else {
+        // Met à jour les champs tout en préservant le numéro de téléphone existant
+        final existingData = userDoc.data() ?? {};
+        await userRef.set({
+          ...existingData,
+          'email': user.email,
+          'name': user.displayName,
+          'id': user.uid,
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print('Erreur lors de la mise à jour du profil: $e');
+    }
+  }
+
 // Méthode pour récupérer l'utilisateur par numéro de téléphone
   Future<UserModel?> getUserByPhone(String phone) async {
     try {
@@ -194,6 +221,7 @@ class AuthService {
   }
   Future<UserCredential> signInWithGoogle() async {
     try {
+      // Déconnexion préalable pour assurer une connexion propre
       await _googleSignIn.signOut();
       await _auth.signOut();
 
@@ -215,19 +243,39 @@ class AuthService {
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       print("Firebase User ID: ${userCredential.user?.uid}");
 
-      // Créer ou mettre à jour l'utilisateur dans Firestore
-      await _firestore
+      // Vérifier si l'utilisateur existe déjà
+      final userDoc = await _firestore
           .collection('users')
           .doc(userCredential.user?.uid)
-          .set({
-        'id': userCredential.user?.uid,
-        'name': userCredential.user?.displayName ?? '',
-        'email': userCredential.user?.email ?? '',
-        'profilePicture': userCredential.user?.photoURL ?? '',
-        'phone': '', // téléphone vide par défaut
-        'balance': 0.0,
-        'contacts': [],
-      }, SetOptions(merge: true)); // merge: true permet de ne pas écraser les données existantes
+          .get();
+
+      if (!userDoc.exists) {
+        // Nouvel utilisateur - création du profil initial
+        await _firestore
+            .collection('users')
+            .doc(userCredential.user?.uid)
+            .set({
+          'id': userCredential.user?.uid,
+          'name': userCredential.user?.displayName ?? '',
+          'email': userCredential.user?.email ?? '',
+          'profilePicture': userCredential.user?.photoURL ?? '',
+          'phone': '',
+          'balance': 0.0,
+          'contacts': [],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Utilisateur existant - mise à jour uniquement des informations de base
+        await _firestore
+            .collection('users')
+            .doc(userCredential.user?.uid)
+            .update({
+          'name': userCredential.user?.displayName ?? '',
+          'email': userCredential.user?.email ?? '',
+          'profilePicture': userCredential.user?.photoURL ?? '',
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+      }
 
       return userCredential;
     } catch (e) {
@@ -239,42 +287,40 @@ class AuthService {
   // Mise à jour du numéro de téléphone
   Future<void> updateUserPhoneNumber(String userId, String phoneNumber) async {
     try {
-      String formattedPhone = phoneNumber.replaceAll(' ', '');
-      if (!formattedPhone.startsWith('+')) {
-        formattedPhone = '+221${formattedPhone.startsWith('221') ? formattedPhone.substring(3) : formattedPhone}';
+      String formattedPhone = phoneNumber;
+      if (!phoneNumber.startsWith('+')) {
+        formattedPhone = '+221$phoneNumber';
       }
 
-      // Vérifier si le numéro existe déjà
-      final QuerySnapshot existingPhone = await _firestore
-          .collection('users')
-          .where('phone', isEqualTo: formattedPhone)
-          .get();
+      await _firestore.collection('users').doc(userId).set({
+        'phone': formattedPhone,
+      }, SetOptions(merge: true));  // Utilisation de merge: true pour préserver les autres champs
 
-      if (existingPhone.docs.isNotEmpty) {
-        throw Exception('Ce numéro de téléphone est déjà utilisé');
+      // Vérification immédiate de la mise à jour
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+      if (docSnapshot.data()?['phone'] != formattedPhone) {
+        throw Exception('Échec de la mise à jour du numéro de téléphone');
       }
-
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .update({'phone': formattedPhone});
-
-      print('Numéro de téléphone mis à jour avec succès: $formattedPhone');
     } catch (e) {
       print('Erreur lors de la mise à jour du numéro: $e');
-      rethrow;
+      throw Exception('Impossible de mettre à jour le numéro de téléphone');
     }
   }
 
   Future<void> signOut() async {
     try {
-      await Future.wait([
-        _auth.signOut(),
-        _googleSignIn.signOut(),
-      ]);
+      // Déconnexion de Firebase Auth
+      await _auth.signOut();
+
+      // Déconnexion de Google Sign In
+      await _googleSignIn.signOut();
+
+      // Nettoyage du cache Firestore
+      await FirebaseFirestore.instance.terminate();
+      await FirebaseFirestore.instance.clearPersistence();
     } catch (e) {
-      print('Sign Out Error: $e');
-      rethrow;
+      print('Erreur lors de la déconnexion: $e');
+      throw Exception('La déconnexion a échoué. Veuillez réessayer.');
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:naffa_money/screens/auth/login_screen.dart';
 import 'package:naffa_money/screens/distributor/distributor_home_screen.dart';
 import 'package:naffa_money/screens/home/home_screen.dart';
@@ -12,7 +13,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await GoogleSignIn().isSignedIn();
+  await GoogleSignIn().signOut(); // Déconnexion préalable de Google
+  await FirebaseAuth.instance.signOut(); // Déconnexion préalable de Firebase
   runApp(MyApp());
 }
 
@@ -21,6 +23,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Naffa',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.grey[50],
@@ -37,70 +40,153 @@ class MyApp extends StatelessWidget {
 
 class AuthenticationWrapper extends StatelessWidget {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Fonction pour vérifier si l'utilisateur est un distributeur
+  bool isDistributor(User? user) {
+    return user?.email?.endsWith('@naffamoney.sn') ?? false;
+  }
+
+  // Fonction pour vérifier si l'utilisateur a un numéro de téléphone
+  Future<bool> hasPhoneNumber(String userId) async {
+    try {
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+
+      if (!docSnapshot.exists) {
+        print('Document utilisateur non trouvé - ID: $userId');
+        return false;
+      }
+
+      final userData = docSnapshot.data();
+      if (userData == null) {
+        print('Données utilisateur null pour ID: $userId');
+        return false;
+      }
+
+      final phone = userData['phone'] as String?;
+      print('Numéro trouvé dans Firestore: $phone');
+
+      final hasValidPhone = phone != null && phone.isNotEmpty;
+      print('Le numéro est-il valide ? $hasValidPhone');
+
+      return hasValidPhone;
+    } catch (e) {
+      print('Erreur de vérification du numéro: $e');
+      // En cas d'erreur, on considère qu'il n'y a pas de numéro
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: _auth.authStateChanges(),
-      builder: (context, snapshot) {
-        // Afficher un écran de chargement pendant la vérification
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.blue.shade50,
-                      ),
-                      child: Image.asset(
-                        'assets/logo.png',
-                        width: 30,
-                        height: 30,
-                      )
-                  ),
-                  SizedBox(height: 16),
-                  CircularProgressIndicator(),
-                  SizedBox(height: 8),
-                  Text(
-                    'Chargement...',
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-        bool isDistributor(User? user) {
-          return user?.email?.endsWith('@naffamoney.sn') ?? false;
+      builder: (context, authSnapshot) {
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
+          return LoadingScreen();
         }
 
-        // Si l'utilisateur est connecté, afficher HomeScreen
-        if (snapshot.hasData && snapshot.data != null) {
-          User? user = snapshot.data;
-
-          if (isDistributor(user)) {
-            return DistributorHomeScreen();
-          } else {
-            return HomeScreen();
-          }
+        if (!authSnapshot.hasData || authSnapshot.data == null) {
+          return LoginScreen();
         }
 
+        final User user = authSnapshot.data!;
 
-        // Si l'utilisateur n'est pas connecté, afficher LoginScreen
-        return LoginScreen();
+        if (isDistributor(user)) {
+          return DistributorHomeScreen();
+        }
+
+        return HomeScreen();
       },
     );
   }
 }
 
-// Classe d'animation personnalisée pour les transitions
+// Widget d'écran de chargement réutilisable
+class LoadingScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blue.shade50,
+              ),
+              child: Image.asset(
+                'assets/logo.png',
+                width: 30,
+                height: 30,
+              ),
+            ),
+            SizedBox(height: 16),
+            CircularProgressIndicator(),
+            SizedBox(height: 8),
+            Text(
+              'Chargement...',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget d'écran d'erreur réutilisable
+class ErrorScreen extends StatelessWidget {
+  final String error;
+
+  const ErrorScreen({Key? key, required this.error}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red),
+              SizedBox(height: 16),
+              Text(
+                'Une erreur est survenue',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
+              ),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  FirebaseAuth.instance.signOut();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                        (route) => false,
+                  );
+                },
+                child: Text('Retour à la connexion'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Classes d'animation pour les transitions de page
 class FadePageRoute<T> extends PageRoute<T> {
   FadePageRoute({
     required this.builder,

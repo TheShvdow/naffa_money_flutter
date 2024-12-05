@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../models/distributor_model.dart';
 import '../../models/user_model.dart';
+import 'dart:convert';
 
 class DistributorDepositScreen extends StatefulWidget {
   @override
@@ -174,6 +176,41 @@ class _DistributorDepositScreenState extends State<DistributorDepositScreen> {
                 decoration: InputDecoration(
                   labelText: 'Numéro du client',
                   prefixIcon: Icon(Icons.phone),
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.qr_code_scanner),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => Scaffold(
+                            appBar: AppBar(title: Text('Scanner le QR code')),
+                            body: MobileScanner(
+                              onDetect: (capture) {
+                                final List<Barcode> barcodes = capture.barcodes;
+                                for (final barcode in barcodes) {
+                                  try {
+                                    final data = jsonDecode(barcode.rawValue ?? '');
+                                    if (data['phone'] != null) {
+                                      Navigator.pop(context, data['phone']);
+                                    }
+                                  } catch (e) {
+                                    print('Erreur de décodage QR: $e');
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+
+                      if (result != null) {
+                        setState(() {
+                          _phoneController.text = result;
+                        });
+                        _verifyClient(result);
+                      }
+                    },
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

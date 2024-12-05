@@ -1,4 +1,4 @@
-package com.example.naffa_money
+package sn.naffa.app
 
 import io.flutter.embedding.android.FlutterActivity
 

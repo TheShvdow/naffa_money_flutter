@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
-import 'PhoneCollectionScreen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -57,18 +57,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await _authService.signInWithGoogle();
       print("Résultat de la connexion Google: ${result.user?.uid}");
 
-      if (mounted) {
-        print("Navigation vers PhoneCollectionScreen");
-        // Forcer la navigation vers PhoneCollectionScreen
-        await Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => PhoneCollectionScreen(
-              userId: result.user!.uid,
-            ),
-          ),
-              (route) => false,
-        );
-      }
     } catch (e) {
       print("Erreur de connexion Google: $e");
       if (mounted) {
