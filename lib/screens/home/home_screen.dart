@@ -207,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.white,
               ),
               const SizedBox(height: 20),
-              Text(
+                Text(
                 'Présentez ce code à un distributeur\npour effectuer une opération',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600]),
@@ -224,8 +224,86 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildProfileImage(UserModel user) {
+    // Vérifier si l'URL de la photo de profil est valide
+    final hasValidProfilePicture = user.profilePicture != null &&
+        user.profilePicture.isNotEmpty &&
+        user.profilePicture.startsWith('http');
+
+    if (!hasValidProfilePicture) {
+      // Afficher l'initiale si pas d'image valide
+      return Center(
+        child: Text(
+          _getInitials(user.name),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
+    // Afficher l'image avec un gestionnaire d'erreur
+    return ClipOval(
+      child: Image.network(
+        user.profilePicture,
+        width: 45,
+        height: 45,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                  loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Center(
+            child: Text(
+              _getInitials(user.name),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _getInitials(String name) {
+    if (name == null || name.isEmpty) return '?';
+
+    final nameParts = name.trim().split(' ');
+    if (nameParts.isEmpty) return '?';
+
+    // Juste la première lettre si un seul mot
+    if (nameParts.length == 1) {
+      return nameParts[0].isNotEmpty
+          ? nameParts[0][0].toUpperCase()
+          : '?';
+    }
+
+    // Première lettre du prénom et du nom si plusieurs mots
+    // Facultatif: on peut retourner juste la première lettre du premier mot
+    // en enlevant cette partie
+    return nameParts[0].isNotEmpty
+        ? nameParts[0][0].toUpperCase()
+        : '?';
+  }
+
   Widget _buildHeader(Map<String, dynamic> userData) {
     final user = UserModel.fromJson(userData);
+
+    print("Photo de l'utilisateur: ${user.profilePicture}");
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -235,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
           end: Alignment.bottomRight,
           colors: [
             Colors.blue[600]!,
-            Colors.blue[800]!,
+            Colors.blue[900]!,
           ],
         ),
       ),
@@ -251,16 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white.withOpacity(0.2),
                   shape: BoxShape.circle,
                 ),
-                child: Center(
-                  child: Text(
-                    user.name[0].toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+                child: _buildProfileImage(user),
               ),
               const SizedBox(width: 12),
               Column(
@@ -300,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.notifications_none_outlined, color: Colors.white),
-                onPressed: () {},
+                onPressed: () { },
               ),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
@@ -675,29 +744,75 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: transaction.isDebit ? Colors.red[50] : Colors.green[50],
-            child: Icon(
-              transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward,
-              color: transaction.isDebit ? Colors.red : Colors.green,
+        child: Stack(
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: transaction.isDebit ? Colors.red[50] : Colors.green[50],
+                child: Icon(
+                  transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward,
+                  color: transaction.isDebit ? Colors.red : Colors.green,
+                ),
+              ),
+              title: Text(
+                transaction.type == 'deposit'
+                    ? 'Dépôt de ${transaction.distributorName ?? 'Distributeur'}'
+                    : (transaction.isDebit
+                    ? 'Envoyé à ${transaction.receiverName ?? 'Inconnu'}'
+                    : 'Reçu de ${transaction.senderName ?? 'Inconnu'}'),
+              ),
+              subtitle: Text(_formatDate(transaction.timestamp)),
+              trailing: Text(
+                '${transaction.isDebit ? "-" : "+"} ${transaction.amount.toStringAsFixed(0)} FCFA',
+                style: TextStyle(
+                  color: transaction.isDebit ? Colors.red : Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
-          title: Text(
-            transaction.type == 'deposit'
-                ? 'Dépôt de ${transaction.distributorName ?? 'Distributeur'}'
-                : (transaction.isDebit
-                ? 'Envoyé à ${transaction.receiverName ?? 'Inconnu'}'
-                : 'Reçu de ${transaction.senderName ?? 'Inconnu'}'),
-          ),
-          subtitle: Text(_formatDate(transaction.timestamp)),
-          trailing: Text(
-            '${transaction.isDebit ? "-" : "+"} ${transaction.amount.toStringAsFixed(0)} FCFA',
-            style: TextStyle(
-              color: transaction.isDebit ? Colors.red : Colors.green,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+            if (transaction.status == 'cancelled')
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(15),
+                      bottomLeft: Radius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Annulé',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              )
+            else if (transaction.status == 'failed')
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(15),
+                      bottomLeft: Radius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Failed',
+                    style: TextStyle(
+
+                )))
+              ),
+          ],
         ),
       ),
     );

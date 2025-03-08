@@ -561,4 +561,40 @@ class TransactionService {
     });
   }
 
+  Stream<List<ScheduledTransfer>> getScheduledTransfers(String userId) {
+    return _firestore
+        .collection('scheduled_transfers')
+        .where('senderUid', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => ScheduledTransfer.fromJson(doc.data()))
+        .toList());
+  }
+
+  // Annuler un transfert programmé
+  Future<void> cancelScheduledTransfer(String transferId) async {
+    try {
+      await _firestore
+          .collection('scheduled_transfers')
+          .doc(transferId)
+          .update({'status': 'cancelled'});
+    } catch (e) {
+      print('Erreur lors de l\'annulation du transfert programmé: $e');
+      rethrow;
+    }
+  }
+
+  // Modifier un transfert programmé
+  Future<void> updateScheduledTransfer(ScheduledTransfer transfer) async {
+    try {
+      await _firestore
+          .collection('scheduled_transfers')
+          .doc(transfer.id)
+          .update(transfer.toJson());
+    } catch (e) {
+      print('Erreur lors de la modification du transfert programmé: $e');
+      rethrow;
+    }
+  }
+
 }

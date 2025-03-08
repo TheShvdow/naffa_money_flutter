@@ -7,11 +7,27 @@ import 'package:uuid/uuid.dart';
 import '../../models/scheduled_transfert.dart';
 
 class ScheduledTransferScreen extends StatefulWidget {
+  final ScheduledTransfer? transfer;
+
+  const ScheduledTransferScreen({Key? key, this.transfer}) : super(key: key);
+
   @override
   _ScheduledTransferScreenState createState() => _ScheduledTransferScreenState();
 }
 
 class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.transfer != null) {
+      _phoneController.text = widget.transfer!.recipientPhone;
+      _amountController.text = widget.transfer!.amount.toString();
+      _selectedDateTime = widget.transfer!.scheduledTime;
+      _scheduleController.text = _formatDate(_selectedDateTime!);
+    }
+  }
+
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
@@ -75,24 +91,29 @@ class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
         throw Exception('Date et heure de programmation invalides');
       }
 
-      final String transactionId = const Uuid().v4();
+      final String transactionId = widget.transfer?.id ?? const Uuid().v4();
       final scheduledTransfer = ScheduledTransfer(
         id: transactionId,
         transactionId: transactionId,
         senderUid: currentUser.id,
         recipientPhone: _phoneController.text.trim(),
         amount: double.parse(_amountController.text.replaceAll(' ', '')),
-        frequency: 'monthly', // Ou autre fréquence sélectionnée
+        frequency: 'monthly',
         scheduledTime: scheduleDate,
       );
 
-      await _transferService.scheduleTransfer(scheduledTransfer);
-      await _transferService.processTransactionsSchedule();
+      if (widget.transfer != null) {
+        await _transferService.updateScheduledTransfer(scheduledTransfer);
+      } else {
+        await _transferService.scheduleTransfer(scheduledTransfer);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Transfert programmé avec succès'),
+            content: Text(widget.transfer != null
+                ? 'Transfert programmé modifié'
+                : 'Transfert programmé avec succès'),
             backgroundColor: Colors.green,
           ),
         );
@@ -102,7 +123,7 @@ class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors du transfert programmé : $e'),
+            content: Text('Erreur : $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -112,6 +133,13 @@ class _ScheduledTransferScreenState extends State<ScheduledTransferScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+  String _formatDate(DateTime dateTime) {
+    return "${dateTime.day.toString().padLeft(2, '0')}/"
+        "${dateTime.month.toString().padLeft(2, '0')}/"
+        "${dateTime.year} "
+        "${dateTime.hour.toString().padLeft(2, '0')}:"
+        "${dateTime.minute.toString().padLeft(2, '0')}";
   }
 
   @override
