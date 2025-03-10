@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:naffa_money/screens/profile/profile_screen.dart';
 import 'package:naffa_money/screens/withdrawal/withdrawal_screen.dart';
@@ -14,7 +13,7 @@ import '../auth/login_screen.dart';
 import '../transfert/transaction_details_screen.dart.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -27,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBalanceHidden = false;
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all';
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -226,8 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProfileImage(UserModel user) {
     // Vérifier si l'URL de la photo de profil est valide
-    final hasValidProfilePicture = user.profilePicture != null &&
-        user.profilePicture.isNotEmpty &&
+    final hasValidProfilePicture = user.profilePicture.isNotEmpty &&
         user.profilePicture.startsWith('http');
 
     if (!hasValidProfilePicture) {
@@ -280,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _getInitials(String name) {
-    if (name == null || name.isEmpty) return '?';
+    if (name.isEmpty) return '?';
 
     final nameParts = name.trim().split(' ');
     if (nameParts.isEmpty) return '?';

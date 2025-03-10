@@ -8,6 +8,8 @@ import '../../models/user_model.dart';
 import 'dart:convert';
 
 class DistributorDepositScreen extends StatefulWidget {
+  const DistributorDepositScreen({super.key});
+
   @override
   _DistributorDepositScreenState createState() => _DistributorDepositScreenState();
 }
@@ -20,7 +22,7 @@ class _DistributorDepositScreenState extends State<DistributorDepositScreen> {
   final _auth = FirebaseAuth.instance;
 
   bool _isLoading = false;
-  bool _isDeposit = true; // Initialisez-le à true pour un dépôt par défaut
+
   UserModel? _client;
 
   Future<void> _verifyClient(String phone) async {

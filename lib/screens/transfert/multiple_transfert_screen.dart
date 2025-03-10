@@ -7,6 +7,8 @@
 
 
   class MultipleTransferScreen extends StatefulWidget {
+  const MultipleTransferScreen({super.key});
+
     @override
     _MultipleTransferScreenState createState() => _MultipleTransferScreenState();
   }
@@ -468,7 +470,7 @@
                               );
                             }
 
-                            return Container(
+                            return SizedBox(
                               height: 120,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,

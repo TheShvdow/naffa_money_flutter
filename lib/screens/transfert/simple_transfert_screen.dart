@@ -6,6 +6,8 @@ import 'package:naffa_money/services/auth_service.dart';
 import '../../models/user_model.dart';
 
 class SimpleTransferScreen extends StatefulWidget {
+  const SimpleTransferScreen({super.key});
+
   @override
   _SimpleTransferScreenState createState() => _SimpleTransferScreenState();
 }
@@ -401,7 +403,7 @@ class _SimpleTransferScreenState extends State<SimpleTransferScreen> {
                             );
                           }
 
-                          return Container(
+                          return SizedBox(
                             height: 120,
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,

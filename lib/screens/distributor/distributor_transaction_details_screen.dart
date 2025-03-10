@@ -10,9 +10,9 @@ class DistributorTransactionDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> transaction;
 
   const DistributorTransactionDetailsScreen({
-    Key? key,
+    super.key,
     required this.transaction,
-  }) : super(key: key);
+  });
 
   Future<void> _generateAndSharePDF() async {
     final pdf = pw.Document();

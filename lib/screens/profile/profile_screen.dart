@@ -8,7 +8,7 @@ import '../../models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
 final UserModel user;
-const ProfileScreen({Key? key, required this.user}) : super(key: key);
+const ProfileScreen({super.key, required this.user});
 
 @override
 _ProfileScreenState createState() => _ProfileScreenState();

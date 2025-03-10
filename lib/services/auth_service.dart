@@ -377,7 +377,7 @@ class AuthService {
       return userCredential;
     } catch (e) {
       print('Erreur de connexion par téléphone: $e');
-      throw e;
+      rethrow;
     }
   }
 

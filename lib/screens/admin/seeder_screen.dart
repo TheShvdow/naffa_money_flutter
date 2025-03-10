@@ -6,6 +6,8 @@ import '../../services/seeder_service.dart';
 class SeederScreen extends StatelessWidget {
   final _seeder = DistributorSeeder();
 
+  SeederScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,11 +100,11 @@ class SeederScreen extends StatelessWidget {
                                 onPressed: () => Navigator.pop(context, false),
                               ),
                               ElevatedButton(
-                                child: Text('Supprimer'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                 ),
                                 onPressed: () => Navigator.pop(context, true),
+                                child: Text('Supprimer'),
                               ),
                             ],
                           ),

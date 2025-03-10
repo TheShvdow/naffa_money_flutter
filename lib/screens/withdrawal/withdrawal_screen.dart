@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:naffa_money/screens/distributor/qr_scanner_screen.dart';
 
 class WithdrawalScreen extends StatefulWidget {
+  const WithdrawalScreen({super.key});
+
   @override
   _WithdrawalScreenState createState() => _WithdrawalScreenState();
 }
@@ -10,7 +12,7 @@ class WithdrawalScreen extends StatefulWidget {
 class _WithdrawalScreenState extends State<WithdrawalScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {

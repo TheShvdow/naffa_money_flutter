@@ -4,6 +4,7 @@ class DistributorModel {
   final String id;
   final String name;
   final String phone;
+  final String profilePicture;
   final String email;
   double balance;
   final String address;
@@ -14,6 +15,7 @@ class DistributorModel {
     required this.id,
     required this.name,
     required this.phone,
+    this.profilePicture = '',
     required this.email,
     this.balance = 0.0,
     required this.address,
@@ -26,6 +28,7 @@ class DistributorModel {
     'name': name,
     'phone': phone,
     'email': email,
+    'profilePicture': profilePicture,
     'balance': balance,
     'address': address,
     'isActive': isActive,
@@ -42,6 +45,7 @@ class DistributorModel {
       id: json['id'],
       name: json['name'],
       phone: json['phone'],
+      profilePicture: json['profilePicture'],
       email: json['email'],
       balance: json['balance']?.toDouble() ?? 0.0,
       address: json['address'],

@@ -16,7 +16,7 @@ class TransactionModel {
   final bool isDebit;
   final String? distributorName;
   final String? distributorId;
-  final String status;  // 'completed', 'failed', 'pending', 'cancelled'
+  late final String status;  // 'completed', 'failed', 'pending', 'cancelled'
   final String? failureReason;
   final List<dynamic>? failedTransfers;  // Pour stocker les transferts échoués dans un transfert multiple
   final List<dynamic>? successfulTransfers;  // Pour stocker les transferts réussis dans un transfert multiple

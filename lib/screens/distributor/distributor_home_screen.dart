@@ -11,6 +11,8 @@ import 'dart:convert';
 import '../../services/transaction_service.dart';
 
 class DistributorHomeScreen extends StatefulWidget {
+  const DistributorHomeScreen({super.key});
+
   @override
   _DistributorHomeScreenState createState() => _DistributorHomeScreenState();
 }
@@ -228,6 +230,8 @@ class _DistributorHomeScreenState extends State<DistributorHomeScreen> {
       ),
     );
   }
+
+
 
   Widget _buildBalanceCard(DistributorModel distributor) {
     return Container(

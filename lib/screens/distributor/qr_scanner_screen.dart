@@ -6,7 +6,7 @@ class QRCodeScreen extends StatelessWidget {
   final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
   final double amount;
 
-  QRCodeScreen({required this.amount});
+  QRCodeScreen({super.key, required this.amount});
 
   @override
   Widget build(BuildContext context) {

@@ -81,6 +81,7 @@ class TransactionService {
           receiverPhone: receiver.phone,
           timestamp: DateTime.now(),
           isDebit: true,
+          // la status de la transaction est à pending pendant 5mn après le transfert de l'argent puis passe à completed
           status: 'pending',
         ).toJson();
 
@@ -91,6 +92,18 @@ class TransactionService {
         rethrow;
       }
     });
+  }
+
+  Future <void> checkStatusTransaction(String transactionId) async {
+   /*je verifie si la transaction existe dans la base de donnee et si elle est en attente ensuite je verifie si timestamp est >30m
+    si oui je change le status de la transaction en completed */
+    final doc = await _firestore.collection('transactions').where('transactionId', isEqualTo: transactionId).limit(1).get();
+    if (doc.docs.isNotEmpty) {
+      final transaction = TransactionModel.fromJson(doc.docs.first.data());
+      if (transaction.status == 'pending' && DateTime.now().difference(transaction.timestamp).inMinutes > 30) {
+        await _firestore.collection('transactions').doc(transaction.id).update({'status': 'completed'});
+      }
+    }
   }
 
   Future<void> transferMultiple({
@@ -327,6 +340,7 @@ class TransactionService {
         throw Exception('Cette transaction ne peut plus être annulée');
       }
 
+
       // Récupérer les références des utilisateurs avant d'écrire
       final senderRef = _firestore.collection('users').doc(transactionData['senderId']);
       final receiverRef = _firestore.collection('users').doc(transactionData['receiverId']);
@@ -356,6 +370,11 @@ class TransactionService {
     } catch (e) {
       throw Exception('Erreur lors de l\'annulation : ${e.toString()}');
     }
+  }
+
+  Future<void> updateTransaction (String transactionId, String status) async {
+    // Mettre à jour le statut de la transaction à "completed"
+    await _firestore.collection('transactions').doc(transactionId).update({'status': status});
   }
 
   Future<void> processWithdrawal({

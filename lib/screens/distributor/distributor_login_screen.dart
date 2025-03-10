@@ -4,7 +4,7 @@ import '../../services/auth_service.dart';
 import '../distributor/distributor_home_screen.dart';
 
 class DistributorLoginScreen extends StatefulWidget {
-  const DistributorLoginScreen({Key? key}) : super(key: key);
+  const DistributorLoginScreen({super.key});
 
   @override
   State<DistributorLoginScreen> createState() => _DistributorLoginScreenState();

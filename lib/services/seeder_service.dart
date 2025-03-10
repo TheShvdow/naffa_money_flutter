@@ -89,7 +89,7 @@ class DistributorSeeder {
       }
     } catch (e) {
       print('Erreur lors du seeding: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -132,7 +132,7 @@ class DistributorSeeder {
       print('Tous les distributeurs ont été supprimés');
     } catch (e) {
       print('Erreur lors de la suppression: $e');
-      throw e;
+      rethrow;
     }
   }
 }

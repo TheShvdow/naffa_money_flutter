@@ -10,7 +10,7 @@ import '../../services/transaction_service.dart';
 class TransactionDetailsScreen extends StatefulWidget {
   final TransactionModel transaction;
 
-  const TransactionDetailsScreen({Key? key, required this.transaction}) : super(key: key);
+  const TransactionDetailsScreen({super.key, required this.transaction});
 
   @override
   _TransactionDetailsScreenState createState() => _TransactionDetailsScreenState();
@@ -20,10 +20,27 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   final TransactionService _transferService = TransactionService();
   bool _isCancelling = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _checkAndUpdateTransactionStatus();
+  }
+
+  Future<void> _checkAndUpdateTransactionStatus() async {
+    if (widget.transaction.status == 'pending' &&
+        DateTime.now().difference(widget.transaction.timestamp).inMinutes > 1) {
+      await _transferService.checkStatusTransaction(widget.transaction.id!);
+      setState(() {
+        widget.transaction.status = 'completed';
+      });
+    }
+  }
+
   String _getTransactionTypeLabel() {
     switch (widget.transaction.type) {
       case 'transfert':
-        if (widget.transaction.senderId != null && widget.transaction.receiverId != null) {
+        if (widget.transaction.senderId != null &&
+            widget.transaction.receiverId != null) {
           return 'Transfert d\'argent';
         }
         return 'Transfert d\'argent';
@@ -55,7 +72,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       case 'failed_multiple_transfer':
         return Icons.error_outline;
       case 'transfert':
-        return widget.transaction.isDebit ? Icons.arrow_upward : Icons.arrow_downward;
+        return widget.transaction.isDebit ? Icons.arrow_upward : Icons
+            .arrow_downward;
       default:
         return Icons.swap_horiz;
     }
@@ -108,6 +126,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         ],
       ),
     );
+  }
+
+  Future <void> _changeStatusCompleted() async {
+    // Mettre le statut de la transaction en "completed"
+    await _transferService.checkStatusTransaction('${widget.transaction.id}');
   }
 
   Future<void> _generateAndSharePDF() async {
@@ -247,7 +270,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         pw.Container(
                           padding: pw.EdgeInsets.all(10),
                           child: pw.Text(
-                            '${widget.transaction.amount.toStringAsFixed(0)} FCFA',
+                            '${widget.transaction.amount.toStringAsFixed(
+                                0)} FCFA',
                             style: pw.TextStyle(
                               fontWeight: pw.FontWeight.bold,
                             ),
@@ -258,7 +282,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                     // Informations selon le type de transaction
                     if (widget.transaction.type == 'transfert' ||
                         widget.transaction.type == 'multiple_transfer' ||
-                        widget.transaction.type == 'failed_multiple_transfer') ...[
+                        widget.transaction.type ==
+                            'failed_multiple_transfer') ...[
                       pw.TableRow(
                         children: [
                           pw.Container(
@@ -298,7 +323,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         ],
                       ),
                     ],
-                    if (widget.transaction.type == 'deposit' && widget.transaction.distributorName != null)
+                    if (widget.transaction.type == 'deposit' &&
+                        widget.transaction.distributorName != null)
                       pw.TableRow(
                         children: [
                           pw.Container(
@@ -346,14 +372,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       text: 'Reçu de transaction Naffa Money',
     );
   }
+
   void _showCancellationDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false,  // Empêcher la fermeture en tapant à l'extérieur
+      barrierDismissible: false,
+      // Empêcher la fermeture en tapant à l'extérieur
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Annuler le transfert'),
-          content: Text('Êtes-vous sûr de vouloir annuler ce transfert ?\n\nCette action est irréversible.'),
+          content: Text(
+              'Êtes-vous sûr de vouloir annuler ce transfert ?\n\nCette action est irréversible.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -401,7 +430,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         ),
       );
 
-      Navigator.of(context).pop();  // Retour à l'écran précédent
+      Navigator.of(context).pop(); // Retour à l'écran précédent
     } catch (e) {
       if (!mounted) return;
 
@@ -424,9 +453,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     // Vérifier si la transaction peut être annulée
     final canCancel = widget.transaction.type == 'transfert' &&
         widget.transaction.isDebit &&
-        DateTime.now().difference(widget.transaction.timestamp).inMinutes <= 30 &&
-        widget.transaction.status != 'completed' &&  // Vérifier que le destinataire n'a pas déjà retiré l'argent
-        widget.transaction.status != 'withdrawn'; // Exemple de statut indiquant que le destinataire a retiré l'argent
+        DateTime
+            .now()
+            .difference(widget.transaction.timestamp)
+            .inMinutes <= 30 &&
+        widget.transaction.status !=
+            'completed' && // Vérifier que le destinataire n'a pas déjà retiré l'argent
+        widget.transaction.status !=
+            'withdrawn'; // Exemple de statut indiquant que le destinataire a retiré l'argent
 
     return Scaffold(
       appBar: AppBar(
@@ -447,10 +481,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             Card(
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: widget.transaction.isDebit ? Colors.red.shade50 : Colors.green.shade50,
+                  backgroundColor: widget.transaction.isDebit ? Colors.red
+                      .shade50 : Colors.green.shade50,
                   child: Icon(
                     _getTransactionIcon(),
-                    color: widget.transaction.isDebit ? Colors.red : Colors.green,
+                    color: widget.transaction.isDebit ? Colors.red : Colors
+                        .green,
                   ),
                 ),
                 title: Text(
@@ -458,9 +494,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 trailing: Text(
-                  '${widget.transaction.isDebit ? '-' : '+'} ${widget.transaction.amount.toStringAsFixed(0)} FCFA',
+                  '${widget.transaction.isDebit ? '-' : '+'} ${widget
+                      .transaction.amount.toStringAsFixed(0)} FCFA',
                   style: TextStyle(
-                    color: widget.transaction.isDebit ? Colors.red : Colors.green,
+                    color: widget.transaction.isDebit ? Colors.red : Colors
+                        .green,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -476,24 +514,31 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInfoRow('ID Transaction', widget.transaction.id ?? 'N/A'),
+                    _buildInfoRow(
+                        'ID Transaction', widget.transaction.id ?? 'N/A'),
                     Divider(),
                     _buildInfoRow('Type', _getTransactionTypeLabel()),
                     Divider(),
-                    _buildInfoRow('Date', _formatDate(widget.transaction.timestamp)),
+                    _buildInfoRow(
+                        'Date', _formatDate(widget.transaction.timestamp)),
                     Divider(),
                     _buildInfoRow('Status', widget.transaction.status),
                     if (widget.transaction.type == 'transfert' ||
                         widget.transaction.type == 'transfert multiple' ||
-                        widget.transaction.type == 'failed_multiple_transfer') ...[
+                        widget.transaction.type ==
+                            'failed_multiple_transfer') ...[
                       Divider(),
-                      _buildInfoRow('Expéditeur', widget.transaction.senderName ?? 'Non spécifié'),
+                      _buildInfoRow('Expéditeur',
+                          widget.transaction.senderName ?? 'Non spécifié'),
                       Divider(),
-                      _buildInfoRow('Destinataire', widget.transaction.receiverName ?? 'Non spécifié'),
+                      _buildInfoRow('Destinataire',
+                          widget.transaction.receiverName ?? 'Non spécifié'),
                     ],
-                    if (widget.transaction.type == 'deposit' && widget.transaction.distributorName != null) ...[
+                    if (widget.transaction.type == 'deposit' &&
+                        widget.transaction.distributorName != null) ...[
                       Divider(),
-                      _buildInfoRow('Distributeur', widget.transaction.distributorName!),
+                      _buildInfoRow(
+                          'Distributeur', widget.transaction.distributorName!),
                     ],
                   ],
                 ),
@@ -501,6 +546,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             ),
 
             SizedBox(height: 20),
+            //faire la verifiaction avec la methode checkStatusTransaction() et change la statue automatiquement à completed
+            if (widget.transaction.status == 'pending' && DateTime.now().difference(widget.transaction.timestamp).inMinutes > 30) ...[
+
+            ],
 
             // Boutons d'action
             Row(
@@ -511,7 +560,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                     icon: Icon(Icons.download),
                     label: Text('Télécharger le reçu'),
                     style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                     ),
                     onPressed: _generateAndSharePDF,
                   ),
@@ -520,10 +570,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton.icon(
-                      icon: Icon(_isCancelling ? Icons.hourglass_empty : Icons.cancel),
+                      icon: Icon(
+                          _isCancelling ? Icons.hourglass_empty : Icons.cancel),
                       label: Text(_isCancelling ? 'Annulation...' : 'Annuler'),
                       style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                       ),

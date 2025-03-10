@@ -9,7 +9,7 @@ import '../../models/scheduled_transfert.dart';
 class ScheduledTransferScreen extends StatefulWidget {
   final ScheduledTransfer? transfer;
 
-  const ScheduledTransferScreen({Key? key, this.transfer}) : super(key: key);
+  const ScheduledTransferScreen({super.key, this.transfer});
 
   @override
   _ScheduledTransferScreenState createState() => _ScheduledTransferScreenState();

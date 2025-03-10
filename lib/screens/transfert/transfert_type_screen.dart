@@ -5,6 +5,8 @@ import 'scheduled_transfert_screen.dart';
 import 'simple_transfert_screen.dart';
 
 class TransferTypeScreen extends StatelessWidget {
+  const TransferTypeScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

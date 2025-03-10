@@ -10,6 +10,8 @@ class ScheduledTransfersListScreen extends StatelessWidget {
   final TransactionService _transactionService = TransactionService();
   final AuthService _authService = AuthService();
 
+  ScheduledTransfersListScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,12 +58,12 @@ class ScheduledTransfersListScreen extends StatelessWidget {
                       trailing: PopupMenuButton(
                         itemBuilder: (context) => [
                           PopupMenuItem(
-                            child: Text('Modifier'),
                             value: 'edit',
+                            child: Text('Modifier'),
                           ),
                           PopupMenuItem(
-                            child: Text('Annuler'),
                             value: 'cancel',
+                            child: Text('Annuler'),
                           ),
                         ],
                         onSelected: (value) async {

@@ -19,6 +19,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -41,6 +43,8 @@ class MyApp extends StatelessWidget {
 class AuthenticationWrapper extends StatelessWidget {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+   AuthenticationWrapper({super.key});
 
   // Fonction pour vérifier si l'utilisateur est un distributeur
   bool isDistributor(User? user) {
@@ -104,6 +108,8 @@ class AuthenticationWrapper extends StatelessWidget {
 
 // Widget d'écran de chargement réutilisable
 class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,7 +150,7 @@ class LoadingScreen extends StatelessWidget {
 class ErrorScreen extends StatelessWidget {
   final String error;
 
-  const ErrorScreen({Key? key, required this.error}) : super(key: key);
+  const ErrorScreen({super.key, required this.error});
 
   @override
   Widget build(BuildContext context) {
